@@ -9,6 +9,7 @@ interface SignalCardProps {
   entryPoint: string;
   validation: "strong" | "medium" | "weak";
   digit?: number;
+  price?: number;
 }
 
 export const SignalCard = ({ 
@@ -17,7 +18,8 @@ export const SignalCard = ({
   probability, 
   entryPoint, 
   validation,
-  digit 
+  digit,
+  price
 }: SignalCardProps) => {
   const isBullish = ["over", "rise"].includes(signalType);
   const isBearish = ["under", "fall"].includes(signalType);
@@ -57,6 +59,13 @@ export const SignalCard = ({
       </div>
 
       <div className="space-y-2">
+        {price !== undefined && (
+          <div className="flex justify-between items-center pb-2 border-b border-border">
+            <span className="text-sm text-muted-foreground">Current Price</span>
+            <span className="text-lg font-bold text-foreground">{price.toFixed(2)}</span>
+          </div>
+        )}
+        
         <div className="flex justify-between items-center">
           <span className="text-sm text-muted-foreground">Probability</span>
           <span className="text-sm font-semibold text-foreground">{probability}%</span>

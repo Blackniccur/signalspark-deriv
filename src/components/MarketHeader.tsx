@@ -1,10 +1,13 @@
 import { Button } from "@/components/ui/button";
 import { Activity, Link2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { useState } from "react";
 
-export const MarketHeader = () => {
-  const [connected, setConnected] = useState(false);
+interface MarketHeaderProps {
+  connected: boolean;
+  onToggleConnection: () => void;
+}
+
+export const MarketHeader = ({ connected, onToggleConnection }: MarketHeaderProps) => {
 
   return (
     <div className="border-b border-border bg-card/50 backdrop-blur-sm">
@@ -26,7 +29,7 @@ export const MarketHeader = () => {
               {connected ? 'Connected' : 'Disconnected'}
             </Badge>
             <Button 
-              onClick={() => setConnected(!connected)}
+              onClick={onToggleConnection}
               className="bg-primary hover:bg-primary/90 text-primary-foreground"
             >
               <Link2 className="w-4 h-4 mr-2" />

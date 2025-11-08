@@ -4,13 +4,15 @@ import { SignalCard } from "@/components/SignalCard";
 import { useSignals } from "@/hooks/useSignals";
 import { RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useState } from "react";
 
 const Index = () => {
-  const signals = useSignals();
+  const [connected, setConnected] = useState(false);
+  const { signals, isConnected } = useSignals(connected);
 
   return (
     <div className="min-h-screen bg-background">
-      <MarketHeader />
+      <MarketHeader connected={isConnected} onToggleConnection={() => setConnected(!connected)} />
       
       <main className="container mx-auto px-4 py-8">
         <div className="space-y-6">
@@ -28,6 +30,16 @@ const Index = () => {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+            {signals.length === 0 && !isConnected && (
+              <div className="col-span-full text-center py-12 text-muted-foreground">
+                Click "Connect to Deriv" to start receiving real-time signals
+              </div>
+            )}
+            {signals.length === 0 && isConnected && (
+              <div className="col-span-full text-center py-12 text-muted-foreground">
+                Connecting to markets...
+              </div>
+            )}
             {signals.map((signal) => (
               <SignalCard
                 key={signal.id}
@@ -37,6 +49,7 @@ const Index = () => {
                 entryPoint={signal.entryPoint}
                 validation={signal.validation}
                 digit={signal.digit}
+                price={signal.price}
               />
             ))}
           </div>
