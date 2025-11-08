@@ -27,11 +27,15 @@ Deno.serve(async (req) => {
   clientSocket.onopen = () => {
     console.log("Client connected");
     
-    // Connect to Deriv WebSocket API
-    derivSocket = new WebSocket("wss://ws.derivws.com/websockets/v3");
+    // Connect to Deriv WebSocket API with app_id (1089 is for testing)
+    const appId = Deno.env.get("DERIV_APP_ID") || "1089";
+    derivSocket = new WebSocket(`wss://ws.derivws.com/websockets/v3?app_id=${appId}`);
     
     derivSocket.onopen = () => {
       console.log("Connected to Deriv API");
+      
+      // Send ping to keep connection alive
+      derivSocket?.send(JSON.stringify({ ping: 1 }));
       
       const apiKey = Deno.env.get("DERIV_API_KEY");
       if (apiKey) {
@@ -41,14 +45,17 @@ Deno.serve(async (req) => {
         }));
       }
       
-      // Subscribe to all markets
-      markets.forEach(symbol => {
-        derivSocket?.send(JSON.stringify({
-          ticks: symbol,
-          subscribe: 1
-        }));
-        subscribedMarkets.add(symbol);
-      });
+      // Subscribe to all markets after a short delay to ensure connection is ready
+      setTimeout(() => {
+        markets.forEach(symbol => {
+          derivSocket?.send(JSON.stringify({
+            ticks: symbol,
+            subscribe: 1
+          }));
+          subscribedMarkets.add(symbol);
+          console.log(`Subscribed to ${symbol}`);
+        });
+      }, 100);
     };
 
     derivSocket.onmessage = (event) => {
