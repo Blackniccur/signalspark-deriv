@@ -65,8 +65,10 @@ const Index = () => {
                       category={signal.category}
                       probability={signal.probability}
                       entryPoint={signal.entryPoint}
+                      expiresAt={signal.expiresAt}
                       validation={signal.validation}
-                      digit={signal.digit}
+                      entryDigit={signal.entryDigit}
+                      predictionDigit={signal.predictionDigit}
                       price={signal.price}
                       targetPrice={signal.targetPrice}
                     />
@@ -84,8 +86,10 @@ const Index = () => {
                       category={signal.category}
                       probability={signal.probability}
                       entryPoint={signal.entryPoint}
+                      expiresAt={signal.expiresAt}
                       validation={signal.validation}
-                      digit={signal.digit}
+                      entryDigit={signal.entryDigit}
+                      predictionDigit={signal.predictionDigit}
                       price={signal.price}
                       targetPrice={signal.targetPrice}
                     />
@@ -103,8 +107,10 @@ const Index = () => {
                       category={signal.category}
                       probability={signal.probability}
                       entryPoint={signal.entryPoint}
+                      expiresAt={signal.expiresAt}
                       validation={signal.validation}
-                      digit={signal.digit}
+                      entryDigit={signal.entryDigit}
+                      predictionDigit={signal.predictionDigit}
                       price={signal.price}
                       targetPrice={signal.targetPrice}
                     />
@@ -122,8 +128,10 @@ const Index = () => {
                       category={signal.category}
                       probability={signal.probability}
                       entryPoint={signal.entryPoint}
+                      expiresAt={signal.expiresAt}
                       validation={signal.validation}
-                      digit={signal.digit}
+                      entryDigit={signal.entryDigit}
+                      predictionDigit={signal.predictionDigit}
                       price={signal.price}
                       targetPrice={signal.targetPrice}
                     />
