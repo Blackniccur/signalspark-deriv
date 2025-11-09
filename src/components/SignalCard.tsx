@@ -1,102 +1,107 @@
-import { Card } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { TrendingUp, TrendingDown, ArrowRight } from "lucide-react";
+import { Progress } from "@/components/ui/progress";
 
 interface SignalCardProps {
   market: string;
-  signalType: "over" | "under" | "even" | "odd" | "rise" | "fall" | "matches" | "differs";
+  signalType: "over" | "under" | "even" | "odd" | "rise" | "fall" | "matches" | "differs" | "touch" | "no-touch";
+  category: "digit" | "direction" | "touch";
   probability: number;
   entryPoint: string;
   validation: "strong" | "medium" | "weak";
   digit?: number;
   price?: number;
+  targetPrice?: number;
 }
 
-export const SignalCard = ({ 
-  market, 
-  signalType, 
-  probability, 
-  entryPoint, 
-  validation,
-  digit,
-  price
-}: SignalCardProps) => {
-  const isBullish = ["over", "rise"].includes(signalType);
-  const isBearish = ["under", "fall"].includes(signalType);
-  
+export const SignalCard = ({ market, signalType, category, probability, entryPoint, validation, digit, price, targetPrice }: SignalCardProps) => {
   const getValidationColor = () => {
     switch (validation) {
-      case "strong": return "bg-success text-success-foreground";
-      case "medium": return "bg-accent text-accent-foreground";
-      case "weak": return "bg-muted text-muted-foreground";
+      case "strong": return "bg-green-500/20 text-green-400 border-green-500/50";
+      case "medium": return "bg-yellow-500/20 text-yellow-400 border-yellow-500/50";
+      case "weak": return "bg-red-500/20 text-red-400 border-red-500/50";
     }
   };
 
   const getSignalColor = () => {
-    if (isBullish) return "text-success";
-    if (isBearish) return "text-destructive";
-    return "text-primary";
+    if (["over", "rise"].includes(signalType)) return "text-green-500";
+    if (["under", "fall"].includes(signalType)) return "text-red-500";
+    if (["even", "odd"].includes(signalType)) return "text-blue-500";
+    if (["touch", "no-touch"].includes(signalType)) return "text-purple-500";
+    return "text-yellow-500";
+  };
+
+  const getCategoryLabel = () => {
+    switch(category) {
+      case "digit": return "Digit Signal";
+      case "direction": return "Direction Signal";
+      case "touch": return "Touch Signal";
+    }
   };
 
   return (
-    <Card className="p-4 bg-card border-border hover:border-primary/50 transition-all duration-300 hover:shadow-[0_0_20px_rgba(34,211,238,0.15)]">
-      <div className="flex items-start justify-between mb-3">
-        <div>
-          <h3 className="font-semibold text-foreground">{market}</h3>
-          <p className="text-sm text-muted-foreground">Volatility Index</p>
-        </div>
-        <Badge className={getValidationColor()}>
-          {validation.toUpperCase()}
-        </Badge>
-      </div>
-
-      <div className="flex items-center gap-2 mb-3">
-        {isBullish && <TrendingUp className="w-5 h-5 text-success" />}
-        {isBearish && <TrendingDown className="w-5 h-5 text-destructive" />}
-        <span className={`text-lg font-bold uppercase ${getSignalColor()}`}>
-          {signalType}
-        </span>
-      </div>
-
-      <div className="space-y-2">
-        {price !== undefined && (
-          <div className="flex justify-between items-center pb-2 border-b border-border">
-            <span className="text-sm text-muted-foreground">Current Price</span>
-            <span className="text-lg font-bold text-foreground">{price.toFixed(2)}</span>
+    <Card className="overflow-hidden border-border/50 hover:border-primary/50 transition-all">
+      <CardHeader>
+        <div className="flex justify-between items-start">
+          <div>
+            <CardTitle className="text-lg">{market}</CardTitle>
+            <p className="text-xs text-muted-foreground">{getCategoryLabel()}</p>
+            <p className="text-sm text-muted-foreground mt-1">
+              {signalType === "over" && "📈 Over"}
+              {signalType === "under" && "📉 Under"}
+              {signalType === "rise" && "🚀 Rise"}
+              {signalType === "fall" && "📉 Fall"}
+              {signalType === "even" && "⚖️ Even"}
+              {signalType === "odd" && "🎯 Odd"}
+              {signalType === "matches" && "🎲 Matches"}
+              {signalType === "differs" && "🔄 Differs"}
+              {signalType === "touch" && "👆 Touch"}
+              {signalType === "no-touch" && "🚫 No Touch"}
+            </p>
           </div>
-        )}
-        
-        <div className="flex justify-between items-center">
-          <span className="text-sm text-muted-foreground">Probability</span>
-          <span className="text-sm font-semibold text-foreground">{probability}%</span>
+          <Badge className={getValidationColor()}>
+            {validation}
+          </Badge>
         </div>
-        
-        <div className="w-full bg-muted rounded-full h-2 overflow-hidden">
-          <div 
-            className={`h-full transition-all duration-500 ${
-              probability >= 70 ? 'bg-success' : 
-              probability >= 50 ? 'bg-accent' : 
-              'bg-destructive'
-            }`}
-            style={{ width: `${probability}%` }}
-          />
-        </div>
-
-        <div className="flex justify-between items-center pt-2">
-          <span className="text-sm text-muted-foreground">Entry Point</span>
-          <div className="flex items-center gap-1">
-            <ArrowRight className="w-4 h-4 text-primary" />
-            <span className="text-sm font-bold text-primary">{entryPoint}</span>
+      </CardHeader>
+      
+      <CardContent>
+        <div className="space-y-3">
+          <div>
+            <div className="flex justify-between text-sm mb-1">
+              <span>Probability</span>
+              <span className={getSignalColor()}>{probability}%</span>
+            </div>
+            <Progress value={probability} className="h-2" />
           </div>
-        </div>
-
-        {digit !== undefined && (
-          <div className="flex justify-between items-center">
-            <span className="text-sm text-muted-foreground">Entry Digit</span>
-            <span className="text-lg font-bold text-accent">{digit}</span>
+          
+          <div className="flex justify-between text-sm">
+            <span className="text-muted-foreground">Valid For</span>
+            <span className="font-medium">100 seconds</span>
           </div>
-        )}
-      </div>
+
+          {price && (
+            <div className="flex justify-between text-sm">
+              <span className="text-muted-foreground">Current Price</span>
+              <span className="font-medium">{price.toFixed(2)}</span>
+            </div>
+          )}
+
+          {targetPrice && (
+            <div className="flex justify-between text-sm">
+              <span className="text-muted-foreground">Target Price</span>
+              <span className="font-medium">{targetPrice.toFixed(2)}</span>
+            </div>
+          )}
+          
+          {digit !== undefined && (
+            <div className="flex justify-between text-sm">
+              <span className="text-muted-foreground">Prediction Digit</span>
+              <span className="font-bold text-lg">{digit}</span>
+            </div>
+          )}
+        </div>
+      </CardContent>
     </Card>
   );
 };

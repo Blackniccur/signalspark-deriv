@@ -3,12 +3,14 @@ import { useState, useEffect, useCallback } from 'react';
 export interface Signal {
   id: string;
   market: string;
-  signalType: "over" | "under" | "even" | "odd" | "rise" | "fall" | "matches" | "differs";
+  signalType: "over" | "under" | "even" | "odd" | "matches" | "differs" | "touch" | "no-touch";
+  category: "digit" | "direction" | "touch";
   probability: number;
   entryPoint: string;
   validation: "strong" | "medium" | "weak";
   digit?: number;
   price?: number;
+  targetPrice?: number;
 }
 
 interface TickData {
@@ -36,55 +38,93 @@ const marketNames: Record<string, string> = {
   "CRASH500N": "Crash 500 Index"
 };
 
-const analyzeTickData = (symbol: string, currentPrice: number, historicalPrices: number[]): Signal => {
+const analyzeTickData = (symbol: string, currentPrice: number, historicalPrices: number[]): Signal[] => {
+  // Need at least 50 ticks for analysis
+  if (historicalPrices.length < 50) {
+    return [];
+  }
+
   const lastDigit = Math.floor((currentPrice * 100) % 10);
-  const priceChange = historicalPrices.length > 0 ? currentPrice - historicalPrices[historicalPrices.length - 1] : 0;
+  const last50Prices = historicalPrices.slice(-50);
   
-  // Analyze recent trend
-  const recentPrices = historicalPrices.slice(-5);
-  const avgPrice = recentPrices.reduce((a, b) => a + b, 0) / (recentPrices.length || 1);
-  const volatility = Math.abs(currentPrice - avgPrice);
+  // Calculate statistics
+  const avgPrice = last50Prices.reduce((a, b) => a + b, 0) / 50;
+  const priceChanges = last50Prices.slice(1).map((p, i) => p - last50Prices[i]);
+  const volatility = Math.sqrt(priceChanges.reduce((sum, change) => sum + change * change, 0) / 49);
+  const trend = (currentPrice - last50Prices[0]) / last50Prices[0];
   
-  // Generate signal based on technical analysis
-  let signalType: Signal["signalType"];
-  let probability: number;
+  // Calculate digit frequencies
+  const digits = last50Prices.map(p => Math.floor((p * 100) % 10));
+  const digitCounts = digits.reduce((acc, d) => {
+    acc[d] = (acc[d] || 0) + 1;
+    return acc;
+  }, {} as Record<number, number>);
   
-  // Determine signal type based on price movement and digit
-  if (priceChange > 0) {
-    signalType = volatility > avgPrice * 0.01 ? "rise" : "over";
-    probability = Math.min(90, 55 + volatility * 1000);
-  } else {
-    signalType = volatility > avgPrice * 0.01 ? "fall" : "under";
-    probability = Math.min(90, 55 + volatility * 1000);
-  }
+  const signals: Signal[] = [];
+  const entryTime = new Date(Date.now() + 100000).toLocaleTimeString(); // 100 seconds validation
   
-  // Add digit-based signals
-  if (lastDigit % 2 === 0) {
-    signalType = Math.random() > 0.5 ? "even" : signalType;
-  } else {
-    signalType = Math.random() > 0.5 ? "odd" : signalType;
-  }
-  
-  // Occasionally add matches/differs signals
-  if (Math.random() > 0.7) {
-    signalType = Math.random() > 0.5 ? "matches" : "differs";
-  }
-  
-  let validation: "strong" | "medium" | "weak";
-  if (probability >= 75) validation = "strong";
-  else if (probability >= 60) validation = "medium";
-  else validation = "weak";
-  
-  return {
-    id: `${symbol}-${Date.now()}`,
+  // Even/Odd Signal
+  const evenCount = digits.filter(d => d % 2 === 0).length;
+  const oddCount = 50 - evenCount;
+  const evenOddSignal: Signal = {
+    id: `${symbol}-evenodd-${Date.now()}`,
     market: marketNames[symbol] || symbol,
-    signalType,
-    probability: Math.floor(probability),
-    entryPoint: new Date(Date.now() + 30000).toLocaleTimeString(),
-    validation,
-    digit: ["matches", "differs", "even", "odd"].includes(signalType) ? lastDigit : undefined,
+    signalType: lastDigit % 2 === 0 ? "odd" : "even",
+    category: "digit",
+    probability: Math.min(85, Math.max(55, Math.abs(evenCount - oddCount) * 2 + 55)),
+    entryPoint: entryTime,
+    validation: "medium",
+    digit: lastDigit,
     price: currentPrice
   };
+  signals.push(evenOddSignal);
+  
+  // Over/Under Signal
+  const overUnderSignal: Signal = {
+    id: `${symbol}-overunder-${Date.now()}`,
+    market: marketNames[symbol] || symbol,
+    signalType: trend > 0 ? "over" : "under",
+    category: "direction",
+    probability: Math.min(80, 60 + Math.abs(trend) * 1000),
+    entryPoint: entryTime,
+    validation: Math.abs(trend) > 0.02 ? "strong" : "medium",
+    digit: lastDigit,
+    price: currentPrice
+  };
+  signals.push(overUnderSignal);
+  
+  // Matches/Differs Signal
+  const mostFrequentDigit = Object.entries(digitCounts).sort((a, b) => b[1] - a[1])[0];
+  const matchesDiffersSignal: Signal = {
+    id: `${symbol}-matchesdiffer-${Date.now()}`,
+    market: marketNames[symbol] || symbol,
+    signalType: lastDigit === parseInt(mostFrequentDigit[0]) ? "differs" : "matches",
+    category: "digit",
+    probability: Math.min(75, 55 + mostFrequentDigit[1]),
+    entryPoint: entryTime,
+    validation: "weak",
+    digit: parseInt(mostFrequentDigit[0]),
+    price: currentPrice
+  };
+  signals.push(matchesDiffersSignal);
+  
+  // Touch/No Touch Signal
+  const priceRange = Math.max(...last50Prices) - Math.min(...last50Prices);
+  const targetPrice = trend > 0 ? currentPrice + volatility * 2 : currentPrice - volatility * 2;
+  const touchSignal: Signal = {
+    id: `${symbol}-touch-${Date.now()}`,
+    market: marketNames[symbol] || symbol,
+    signalType: volatility > avgPrice * 0.015 ? "touch" : "no-touch",
+    category: "touch",
+    probability: Math.min(82, 58 + (volatility / avgPrice) * 2000),
+    entryPoint: entryTime,
+    validation: volatility > avgPrice * 0.02 ? "strong" : "medium",
+    price: currentPrice,
+    targetPrice: parseFloat(targetPrice.toFixed(2))
+  };
+  signals.push(touchSignal);
+  
+  return signals;
 };
 
 export const useSignals = (connected: boolean) => {
@@ -110,19 +150,18 @@ export const useSignals = (connected: boolean) => {
           
           setPriceHistory(prev => {
             const history = prev[tick.symbol] || [];
-            const newHistory = [...history, tick.quote].slice(-20);
+            const newHistory = [...history, tick.quote].slice(-100);
             
             setSignals(prevSignals => {
-              const existingIndex = prevSignals.findIndex(s => s.market === marketNames[tick.symbol]);
-              const newSignal = analyzeTickData(tick.symbol, tick.quote, newHistory);
+              const newSignals = analyzeTickData(tick.symbol, tick.quote, newHistory);
               
-              if (existingIndex >= 0) {
-                const updated = [...prevSignals];
-                updated[existingIndex] = newSignal;
-                return updated;
-              } else {
-                return [...prevSignals, newSignal];
+              if (newSignals.length === 0) {
+                return prevSignals;
               }
+              
+              // Remove old signals for this market
+              const filtered = prevSignals.filter(s => s.market !== marketNames[tick.symbol]);
+              return [...filtered, ...newSignals];
             });
             
             return { ...prev, [tick.symbol]: newHistory };
