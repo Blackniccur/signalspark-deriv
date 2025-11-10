@@ -157,6 +157,7 @@ export const useSignals = (connected: boolean) => {
   const [ws, setWs] = useState<WebSocket | null>(null);
   const [priceHistory, setPriceHistory] = useState<Record<string, number[]>>({});
   const [tickCounts, setTickCounts] = useState<Record<string, number>>({});
+  const [lastSignalTime, setLastSignalTime] = useState<Record<string, Record<string, number>>>({});
 
   const connect = useCallback(() => {
     if (ws?.readyState === WebSocket.OPEN) return;
@@ -183,19 +184,41 @@ export const useSignals = (connected: boolean) => {
               [tick.symbol]: newHistory.length
             }));
             
-            setSignals(prevSignals => {
-              const newSignals = analyzeTickData(tick.symbol, tick.quote, newHistory);
-              
-              if (newSignals.length === 0) {
-                return prevSignals;
-              }
-              
-              // Keep signals, just add new ones (limit to 50 total)
-              const filtered = prevSignals.filter(s => 
-                s.expiresAt > Date.now() // Only remove truly expired signals
-              );
-              return [...filtered, ...newSignals].slice(-50);
-            });
+            // Only generate signals if we have 50+ ticks
+            if (newHistory.length >= 50) {
+              setLastSignalTime(prevLastSignalTime => {
+                const now = Date.now();
+                const symbolSignalTimes = prevLastSignalTime[tick.symbol] || {};
+                
+                setSignals(prevSignals => {
+                  // Remove expired signals
+                  const activeSignals = prevSignals.filter(s => s.expiresAt > now);
+                  
+                  // Generate new signals only for expired signal types
+                  const newSignals = analyzeTickData(tick.symbol, tick.quote, newHistory);
+                  const signalsToAdd: Signal[] = [];
+                  
+                  newSignals.forEach(newSignal => {
+                    const signalKey = `${tick.symbol}-${newSignal.signalType}`;
+                    const lastTime = symbolSignalTimes[signalKey] || 0;
+                    
+                    // Only add if no active signal exists for this type or the last one expired
+                    const hasActiveSignal = activeSignals.some(
+                      s => s.market === newSignal.market && s.signalType === newSignal.signalType && s.expiresAt > now
+                    );
+                    
+                    if (!hasActiveSignal && now - lastTime >= 100000) {
+                      signalsToAdd.push(newSignal);
+                      symbolSignalTimes[signalKey] = now;
+                    }
+                  });
+                  
+                  return [...activeSignals, ...signalsToAdd].slice(-50);
+                });
+                
+                return { ...prevLastSignalTime, [tick.symbol]: symbolSignalTimes };
+              });
+            }
             
             return { ...prev, [tick.symbol]: newHistory };
           });
@@ -224,6 +247,7 @@ export const useSignals = (connected: boolean) => {
       setSignals([]);
       setPriceHistory({});
       setTickCounts({});
+      setLastSignalTime({});
     }
   }, [ws]);
 
