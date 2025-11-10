@@ -156,6 +156,7 @@ export const useSignals = (connected: boolean) => {
   const [signals, setSignals] = useState<Signal[]>([]);
   const [ws, setWs] = useState<WebSocket | null>(null);
   const [priceHistory, setPriceHistory] = useState<Record<string, number[]>>({});
+  const [tickCounts, setTickCounts] = useState<Record<string, number>>({});
 
   const connect = useCallback(() => {
     if (ws?.readyState === WebSocket.OPEN) return;
@@ -177,6 +178,11 @@ export const useSignals = (connected: boolean) => {
             const history = prev[tick.symbol] || [];
             const newHistory = [...history, tick.quote].slice(-100);
             
+            setTickCounts(prevCounts => ({
+              ...prevCounts,
+              [tick.symbol]: newHistory.length
+            }));
+            
             setSignals(prevSignals => {
               const newSignals = analyzeTickData(tick.symbol, tick.quote, newHistory);
               
@@ -184,9 +190,11 @@ export const useSignals = (connected: boolean) => {
                 return prevSignals;
               }
               
-              // Remove old signals for this market
-              const filtered = prevSignals.filter(s => s.market !== marketNames[tick.symbol]);
-              return [...filtered, ...newSignals];
+              // Keep signals, just add new ones (limit to 50 total)
+              const filtered = prevSignals.filter(s => 
+                s.expiresAt > Date.now() // Only remove truly expired signals
+              );
+              return [...filtered, ...newSignals].slice(-50);
             });
             
             return { ...prev, [tick.symbol]: newHistory };
@@ -215,6 +223,7 @@ export const useSignals = (connected: boolean) => {
       setWs(null);
       setSignals([]);
       setPriceHistory({});
+      setTickCounts({});
     }
   }, [ws]);
 
@@ -232,5 +241,5 @@ export const useSignals = (connected: boolean) => {
     };
   }, [connected]);
 
-  return { signals, isConnected: ws?.readyState === WebSocket.OPEN };
+  return { signals, isConnected: ws?.readyState === WebSocket.OPEN, tickCounts };
 };

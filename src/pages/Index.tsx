@@ -1,6 +1,7 @@
 import { MarketHeader } from "@/components/MarketHeader";
 import { MarketStats } from "@/components/MarketStats";
 import { SignalCard } from "@/components/SignalCard";
+import { SignalScanner } from "@/components/SignalScanner";
 import { useSignals } from "@/hooks/useSignals";
 import { RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -9,7 +10,7 @@ import { useState } from "react";
 
 const Index = () => {
   const [connected, setConnected] = useState(false);
-  const { signals, isConnected } = useSignals(connected);
+  const { signals, isConnected, tickCounts } = useSignals(connected);
 
   const digitSignals = signals.filter(s => s.category === "digit");
   const directionSignals = signals.filter(s => s.category === "direction");
@@ -21,6 +22,8 @@ const Index = () => {
       
       <main className="container mx-auto px-4 py-8">
         <div className="space-y-6">
+          <SignalScanner tickCounts={tickCounts} isConnected={isConnected} />
+          
           <MarketStats />
 
           <div className="flex items-center justify-between">
