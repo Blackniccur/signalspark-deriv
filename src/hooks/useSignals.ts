@@ -3,8 +3,8 @@ import { useState, useEffect, useCallback } from 'react';
 export interface Signal {
   id: string;
   market: string;
-  signalType: "over" | "under" | "even" | "odd" | "matches" | "differs" | "touch" | "no-touch";
-  category: "digit" | "direction" | "touch";
+  signalType: "over" | "under" | "even" | "odd" | "matches" | "differs";
+  category: "digit" | "direction";
   probability: number;
   entryPoint: string;
   expiresAt: number;
@@ -12,7 +12,6 @@ export interface Signal {
   entryDigit: number;
   predictionDigit?: number;
   price?: number;
-  targetPrice?: number;
 }
 
 interface TickData {
@@ -127,27 +126,6 @@ const analyzeTickData = (symbol: string, currentPrice: number, historicalPrices:
     price: currentPrice
   };
   signals.push(matchesDiffersSignal);
-  
-  // Touch/No Touch Signal
-  const priceRange = Math.max(...last50Prices) - Math.min(...last50Prices);
-  const volatilityRatio = volatility / avgPrice;
-  const targetPrice = recentTrend > 0 ? currentPrice + volatility * 2.5 : currentPrice - volatility * 2.5;
-  const predictedTouch = volatilityRatio > 0.018 ? "touch" : "no-touch";
-  
-  const touchSignal: Signal = {
-    id: `${symbol}-touch-${now}`,
-    market: marketNames[symbol] || symbol,
-    signalType: predictedTouch,
-    category: "touch",
-    probability: Math.min(84, 60 + volatilityRatio * 2400),
-    entryPoint: entryTime,
-    expiresAt,
-    validation: volatilityRatio > 0.025 ? "strong" : volatilityRatio > 0.015 ? "medium" : "weak",
-    entryDigit,
-    price: currentPrice,
-    targetPrice: parseFloat(targetPrice.toFixed(2))
-  };
-  signals.push(touchSignal);
   
   return signals;
 };

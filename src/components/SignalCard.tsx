@@ -6,8 +6,8 @@ import { AlertCircle } from "lucide-react";
 
 interface SignalCardProps {
   market: string;
-  signalType: "over" | "under" | "even" | "odd" | "rise" | "fall" | "matches" | "differs" | "touch" | "no-touch";
-  category: "digit" | "direction" | "touch";
+  signalType: "over" | "under" | "even" | "odd" | "matches" | "differs";
+  category: "digit" | "direction";
   probability: number;
   entryPoint: string;
   expiresAt: number;
@@ -15,10 +15,9 @@ interface SignalCardProps {
   entryDigit: number;
   predictionDigit?: number;
   price?: number;
-  targetPrice?: number;
 }
 
-export const SignalCard = ({ market, signalType, category, probability, entryPoint, expiresAt, validation, entryDigit, predictionDigit, price, targetPrice }: SignalCardProps) => {
+export const SignalCard = ({ market, signalType, category, probability, entryPoint, expiresAt, validation, entryDigit, predictionDigit, price }: SignalCardProps) => {
   const [timeLeft, setTimeLeft] = useState<number>(0);
   const [isExpired, setIsExpired] = useState(false);
 
@@ -43,10 +42,10 @@ export const SignalCard = ({ market, signalType, category, probability, entryPoi
   };
 
   const getSignalColor = () => {
-    if (["over", "rise"].includes(signalType)) return "text-green-500";
-    if (["under", "fall"].includes(signalType)) return "text-red-500";
+    if (signalType === "over") return "text-green-500";
+    if (signalType === "under") return "text-red-500";
     if (["even", "odd"].includes(signalType)) return "text-blue-500";
-    if (["touch", "no-touch"].includes(signalType)) return "text-purple-500";
+    if (["matches", "differs"].includes(signalType)) return "text-purple-500";
     return "text-yellow-500";
   };
 
@@ -54,7 +53,6 @@ export const SignalCard = ({ market, signalType, category, probability, entryPoi
     switch(category) {
       case "digit": return "Digit Signal";
       case "direction": return "Direction Signal";
-      case "touch": return "Touch Signal";
     }
   };
 
@@ -68,14 +66,10 @@ export const SignalCard = ({ market, signalType, category, probability, entryPoi
             <p className="text-sm text-muted-foreground mt-1">
               {signalType === "over" && "📈 Over"}
               {signalType === "under" && "📉 Under"}
-              {signalType === "rise" && "🚀 Rise"}
-              {signalType === "fall" && "📉 Fall"}
               {signalType === "even" && "⚖️ Even"}
               {signalType === "odd" && "🎯 Odd"}
               {signalType === "matches" && "🎲 Matches"}
               {signalType === "differs" && "🔄 Differs"}
-              {signalType === "touch" && "👆 Touch"}
-              {signalType === "no-touch" && "🚫 No Touch"}
             </p>
           </div>
           <Badge className={getValidationColor()}>
@@ -124,13 +118,6 @@ export const SignalCard = ({ market, signalType, category, probability, entryPoi
             <div className="flex justify-between text-sm">
               <span className="text-muted-foreground">Current Price</span>
               <span className="font-medium">{price.toFixed(2)}</span>
-            </div>
-          )}
-
-          {targetPrice && (
-            <div className="flex justify-between text-sm">
-              <span className="text-muted-foreground">Target Price</span>
-              <span className="font-medium">{targetPrice.toFixed(2)}</span>
             </div>
           )}
         </div>
