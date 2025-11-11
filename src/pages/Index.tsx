@@ -7,6 +7,8 @@ import { RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Info } from "lucide-react";
 import { useState } from "react";
 
 const Index = () => {
@@ -28,6 +30,13 @@ const Index = () => {
       
       <main className="container mx-auto px-4 py-8">
         <div className="space-y-6">
+          <Alert className="bg-primary/10 border-primary">
+            <Info className="h-4 w-4" />
+            <AlertDescription className="text-foreground">
+              <strong>Log in to mentorhub.site</strong> • Using Richkiddollar hunterbot • Only configured bot works
+            </AlertDescription>
+          </Alert>
+          
           <SignalScanner tickCounts={tickCounts} isConnected={isConnected} />
           
           <MarketStats />
