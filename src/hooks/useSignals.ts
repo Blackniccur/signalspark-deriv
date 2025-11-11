@@ -155,7 +155,7 @@ export const useSignals = (connected: boolean) => {
           
           setPriceHistory(prev => {
             const history = prev[tick.symbol] || [];
-            const newHistory = [...history, tick.quote].slice(-100);
+            const newHistory = [...history, tick.quote].slice(-50);
             
             setTickCounts(prevCounts => ({
               ...prevCounts,
@@ -216,7 +216,7 @@ export const useSignals = (connected: boolean) => {
     };
     
     setWs(websocket);
-  }, [ws]);
+  }, []);
 
   const disconnect = useCallback(() => {
     if (ws) {
