@@ -73,7 +73,7 @@ const analyzeTickData = (symbol: string, currentPrice: number, historicalPrices:
   const evenOddConfidence = Math.abs(evenInRecent - oddInRecent) / 10;
   
   const evenOddSignal: Signal = {
-    id: `${symbol}-evenodd-${now}`,
+    id: `${symbol}-evenodd`,
     market: marketNames[symbol] || symbol,
     signalType: predictedEvenOdd,
     category: "digit",
@@ -92,7 +92,7 @@ const analyzeTickData = (symbol: string, currentPrice: number, historicalPrices:
   const trendStrength = Math.abs(recentTrend / avgPrice);
   
   const overUnderSignal: Signal = {
-    id: `${symbol}-overunder-${now}`,
+    id: `${symbol}-overunder`,
     market: marketNames[symbol] || symbol,
     signalType: predictedDirection,
     category: "direction",
@@ -113,7 +113,7 @@ const analyzeTickData = (symbol: string, currentPrice: number, historicalPrices:
   const predictedType = entryDigit === predictionDigit ? "differs" : "matches";
   
   const matchesDiffersSignal: Signal = {
-    id: `${symbol}-matchesdiffer-${now}`,
+    id: `${symbol}-matchesdiffer`,
     market: marketNames[symbol] || symbol,
     signalType: predictedType,
     category: "digit",
@@ -182,7 +182,7 @@ export const useSignals = (connected: boolean) => {
                     
                     // Only add if no active signal exists for this type or the last one expired
                     const hasActiveSignal = activeSignals.some(
-                      s => s.market === newSignal.market && s.signalType === newSignal.signalType && s.expiresAt > now
+                      s => s.id === newSignal.id
                     );
                     
                     if (!hasActiveSignal && now - lastTime >= 100000) {
@@ -191,7 +191,13 @@ export const useSignals = (connected: boolean) => {
                     }
                   });
                   
-                  return [...activeSignals, ...signalsToAdd].slice(-50);
+                  // Sort signals consistently to prevent jumping
+                  const allSignals = [...activeSignals, ...signalsToAdd].sort((a, b) => {
+                    if (a.market !== b.market) return a.market.localeCompare(b.market);
+                    return a.id.localeCompare(b.id);
+                  });
+                  
+                  return allSignals.slice(-50);
                 });
                 
                 return { ...prevLastSignalTime, [tick.symbol]: symbolSignalTimes };
