@@ -1,6 +1,7 @@
 import { Card } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Activity } from "lucide-react";
+import { useEffect, useRef } from "react";
 
 interface SignalScannerProps {
   tickCounts: Record<string, number>;
@@ -21,6 +22,56 @@ const marketNames: Record<string, string> = {
 };
 
 export const SignalScanner = ({ tickCounts, isConnected }: SignalScannerProps) => {
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const scanIntervalRef = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    if (!isConnected) {
+      // Stop scanning sound when disconnected
+      if (scanIntervalRef.current) {
+        clearInterval(scanIntervalRef.current);
+        scanIntervalRef.current = null;
+      }
+      return;
+    }
+
+    // Initialize audio context
+    if (!audioContextRef.current) {
+      audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+    }
+
+    // Play scanning sound
+    const playBeep = () => {
+      if (!audioContextRef.current) return;
+      
+      const ctx = audioContextRef.current;
+      const oscillator = ctx.createOscillator();
+      const gainNode = ctx.createGain();
+      
+      oscillator.connect(gainNode);
+      gainNode.connect(ctx.destination);
+      
+      oscillator.frequency.value = 800;
+      oscillator.type = 'sine';
+      
+      gainNode.gain.setValueAtTime(0.1, ctx.currentTime);
+      gainNode.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.1);
+      
+      oscillator.start(ctx.currentTime);
+      oscillator.stop(ctx.currentTime + 0.1);
+    };
+
+    // Play scanning sound every 2 seconds
+    scanIntervalRef.current = setInterval(playBeep, 2000);
+    playBeep(); // Play immediately when connected
+
+    return () => {
+      if (scanIntervalRef.current) {
+        clearInterval(scanIntervalRef.current);
+      }
+    };
+  }, [isConnected]);
+
   if (!isConnected) return null;
 
   return (
