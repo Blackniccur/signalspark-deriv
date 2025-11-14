@@ -136,6 +136,7 @@ export const useSignals = (connected: boolean) => {
   const [priceHistory, setPriceHistory] = useState<Record<string, number[]>>({});
   const [tickCounts, setTickCounts] = useState<Record<string, number>>({});
   const [lastSignalTime, setLastSignalTime] = useState<Record<string, Record<string, number>>>({});
+  const [digitPatterns, setDigitPatterns] = useState<Record<string, { digits: number[], prices: number[], timestamps: number[] }>>({});
 
   const connect = useCallback(() => {
     if (ws?.readyState === WebSocket.OPEN) return;
@@ -152,6 +153,24 @@ export const useSignals = (connected: boolean) => {
         
         if (message.type === 'tick' && message.data) {
           const tick: TickData = message.data;
+          
+          // Track digit patterns (last 20 digits)
+          const lastDigit = Math.floor((tick.quote * 100) % 10);
+          setDigitPatterns(prev => {
+            const current = prev[tick.symbol] || { digits: [], prices: [], timestamps: [] };
+            const newDigits = [...current.digits, lastDigit].slice(-20);
+            const newPrices = [...current.prices, tick.quote].slice(-20);
+            const newTimestamps = [...current.timestamps, Date.now()].slice(-20);
+            
+            return {
+              ...prev,
+              [tick.symbol]: {
+                digits: newDigits,
+                prices: newPrices,
+                timestamps: newTimestamps
+              }
+            };
+          });
           
           setPriceHistory(prev => {
             const history = prev[tick.symbol] || [];
@@ -232,6 +251,7 @@ export const useSignals = (connected: boolean) => {
       setPriceHistory({});
       setTickCounts({});
       setLastSignalTime({});
+      setDigitPatterns({});
     }
   }, [ws]);
 
@@ -249,5 +269,5 @@ export const useSignals = (connected: boolean) => {
     };
   }, [connected]);
 
-  return { signals, isConnected: ws?.readyState === WebSocket.OPEN, tickCounts };
+  return { signals, isConnected: ws?.readyState === WebSocket.OPEN, tickCounts, digitPatterns };
 };

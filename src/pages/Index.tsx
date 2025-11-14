@@ -2,6 +2,7 @@ import { MarketHeader } from "@/components/MarketHeader";
 import { MarketStats } from "@/components/MarketStats";
 import { SignalCard } from "@/components/SignalCard";
 import { SignalScanner } from "@/components/SignalScanner";
+import { DigitPatternTracker } from "@/components/DigitPatternTracker";
 import { useSignals } from "@/hooks/useSignals";
 import { RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -14,7 +15,7 @@ import { useState } from "react";
 const Index = () => {
   const [connected, setConnected] = useState(false);
   const [selectedMarket, setSelectedMarket] = useState<string>("all");
-  const { signals, isConnected, tickCounts } = useSignals(connected);
+  const { signals, isConnected, tickCounts, digitPatterns } = useSignals(connected);
 
   const filteredSignals = selectedMarket === "all" 
     ? signals 
@@ -40,6 +41,16 @@ const Index = () => {
           <SignalScanner tickCounts={tickCounts} isConnected={isConnected} />
           
           <MarketStats />
+          
+          {isConnected && Object.keys(digitPatterns).length > 0 && (
+            <>
+              <div>
+                <h2 className="text-xl font-bold text-foreground">Last Digit Patterns</h2>
+                <p className="text-sm text-muted-foreground">Real-time even/odd and rise/fall probabilities</p>
+              </div>
+              <DigitPatternTracker patterns={digitPatterns} selectedMarket={selectedMarket} />
+            </>
+          )}
 
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
             <div>
