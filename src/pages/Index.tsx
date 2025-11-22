@@ -3,6 +3,7 @@ import { MarketStats } from "@/components/MarketStats";
 import { SignalCard } from "@/components/SignalCard";
 import { SignalScanner } from "@/components/SignalScanner";
 import { DigitPatternTracker } from "@/components/DigitPatternTracker";
+import { DerivTradingView } from "@/components/DerivTradingView";
 import { useSignals } from "@/hooks/useSignals";
 import { RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -41,6 +42,10 @@ const Index = () => {
           <SignalScanner tickCounts={tickCounts} isConnected={isConnected} />
           
           <MarketStats />
+
+          {isConnected && Object.keys(digitPatterns).length > 0 && (
+            <DerivTradingView digitPatterns={digitPatterns} />
+          )}
           
           {isConnected && Object.keys(digitPatterns).length > 0 && (
             <>
