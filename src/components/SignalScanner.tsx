@@ -1,7 +1,4 @@
-import { Card } from "@/components/ui/card";
-import { Progress } from "@/components/ui/progress";
 import { Activity } from "lucide-react";
-import { useEffect, useRef } from "react";
 
 interface SignalScannerProps {
   tickCounts: Record<string, number>;
@@ -22,65 +19,15 @@ const marketNames: Record<string, string> = {
 };
 
 export const SignalScanner = ({ tickCounts, isConnected }: SignalScannerProps) => {
-  const audioContextRef = useRef<AudioContext | null>(null);
-  const scanIntervalRef = useRef<NodeJS.Timeout | null>(null);
-
-  useEffect(() => {
-    if (!isConnected) {
-      // Stop scanning sound when disconnected
-      if (scanIntervalRef.current) {
-        clearInterval(scanIntervalRef.current);
-        scanIntervalRef.current = null;
-      }
-      return;
-    }
-
-    // Initialize audio context
-    if (!audioContextRef.current) {
-      audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
-    }
-
-    // Play scanning sound
-    const playBeep = () => {
-      if (!audioContextRef.current) return;
-      
-      const ctx = audioContextRef.current;
-      const oscillator = ctx.createOscillator();
-      const gainNode = ctx.createGain();
-      
-      oscillator.connect(gainNode);
-      gainNode.connect(ctx.destination);
-      
-      oscillator.frequency.value = 800;
-      oscillator.type = 'sine';
-      
-      gainNode.gain.setValueAtTime(0.1, ctx.currentTime);
-      gainNode.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.1);
-      
-      oscillator.start(ctx.currentTime);
-      oscillator.stop(ctx.currentTime + 0.1);
-    };
-
-    // Play scanning sound every 2 seconds
-    scanIntervalRef.current = setInterval(playBeep, 2000);
-    playBeep(); // Play immediately when connected
-
-    return () => {
-      if (scanIntervalRef.current) {
-        clearInterval(scanIntervalRef.current);
-      }
-    };
-  }, [isConnected]);
-
   if (!isConnected) return null;
 
   return (
-    <Card className="p-4 mb-6 border-primary/20">
+    <div className="glass-panel rounded-2xl p-5 glow-cyan">
       <div className="flex items-center gap-2 mb-4">
         <Activity className="h-5 w-5 text-primary animate-pulse" />
-        <h3 className="font-semibold text-lg">Signal Scanner</h3>
+        <h3 className="font-orbitron text-sm font-bold tracking-wider text-primary">SIGNAL SCANNER</h3>
         <div className="ml-auto">
-          <span className="text-xs px-2 py-1 bg-green-500/20 text-green-400 rounded-full border border-green-500/50">
+          <span className="text-[10px] px-3 py-1 bg-success/10 text-success rounded-full border border-success/30 font-orbitron tracking-widest animate-pulse">
             SCANNING
           </span>
         </div>
@@ -94,22 +41,27 @@ export const SignalScanner = ({ tickCounts, isConnected }: SignalScannerProps) =
           return (
             <div key={symbol} className="space-y-1">
               <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">{marketNames[symbol] || symbol}</span>
-                <span className={`font-medium ${isReady ? 'text-green-400' : 'text-yellow-400'}`}>
-                  {count}/50 ticks {isReady && '✓'}
+                <span className="text-muted-foreground text-xs">{marketNames[symbol] || symbol}</span>
+                <span className={`font-orbitron text-xs font-medium ${isReady ? 'text-success' : 'text-primary'}`}>
+                  {count}/50 {isReady && '✓'}
                 </span>
               </div>
-              <Progress value={progress} className="h-2" />
+              <div className="h-1.5 bg-muted rounded-full overflow-hidden">
+                <div 
+                  className={`h-full rounded-full transition-all duration-500 ${isReady ? 'bg-success' : 'confidence-bar'}`}
+                  style={{ width: `${progress}%` }}
+                />
+              </div>
             </div>
           );
         })}
       </div>
       
       {Object.keys(tickCounts).length === 0 && (
-        <p className="text-sm text-muted-foreground text-center py-4">
+        <p className="text-sm text-muted-foreground text-center py-4 font-orbitron text-xs tracking-wider">
           Waiting for market data...
         </p>
       )}
-    </Card>
+    </div>
   );
 };
