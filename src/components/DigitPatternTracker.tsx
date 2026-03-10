@@ -1,6 +1,3 @@
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-
 interface DigitPattern {
   digits: number[];
   prices: number[];
@@ -30,24 +27,19 @@ export const DigitPatternTracker = ({ patterns, selectedMarket }: DigitPatternTr
     ? Object.entries(patterns)
     : Object.entries(patterns).filter(([symbol]) => symbol === selectedMarket);
 
-  if (filteredPatterns.length === 0) {
-    return null;
-  }
+  if (filteredPatterns.length === 0) return null;
 
   return (
     <div className="space-y-4">
       {filteredPatterns.map(([symbol, pattern]) => {
         if (pattern.digits.length === 0) return null;
-
         const { digits, prices } = pattern;
         
-        // Calculate Even/Odd probabilities
         const evenCount = digits.filter(d => d % 2 === 0).length;
         const oddCount = digits.length - evenCount;
         const evenProbability = digits.length > 0 ? Math.round((evenCount / digits.length) * 100) : 0;
         const oddProbability = digits.length > 0 ? Math.round((oddCount / digits.length) * 100) : 0;
         
-        // Calculate Over/Under (Rise/Fall) probabilities
         const priceChanges = prices.slice(1).map((price, i) => price > prices[i] ? 1 : -1);
         const riseCount = priceChanges.filter(change => change === 1).length;
         const fallCount = priceChanges.length - riseCount;
@@ -55,74 +47,56 @@ export const DigitPatternTracker = ({ patterns, selectedMarket }: DigitPatternTr
         const fallProbability = priceChanges.length > 0 ? Math.round((fallCount / priceChanges.length) * 100) : 0;
         
         return (
-          <Card key={symbol} className="border-border/50">
-            <CardHeader>
-              <CardTitle className="text-lg">{marketNames[symbol] || symbol}</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {/* Last Digits Display */}
-              <div>
-                <p className="text-sm text-muted-foreground mb-2">Last 20 Digits</p>
-                <div className="flex flex-wrap gap-2">
-                  {digits.map((digit, idx) => (
-                    <Badge 
-                      key={idx}
-                      variant="outline"
-                      className={`w-8 h-8 flex items-center justify-center ${
-                        digit % 2 === 0 
-                          ? 'bg-blue-500/20 text-blue-400 border-blue-500/50' 
-                          : 'bg-purple-500/20 text-purple-400 border-purple-500/50'
-                      }`}
-                    >
-                      {digit}
-                    </Badge>
-                  ))}
-                </div>
+          <div key={symbol} className="glass-panel rounded-2xl p-5">
+            <h3 className="font-orbitron text-sm font-bold text-accent tracking-wider mb-4">
+              {marketNames[symbol] || symbol}
+            </h3>
+            
+            {/* Last Digits */}
+            <div className="mb-4">
+              <p className="text-xs text-muted-foreground uppercase tracking-wider mb-2">Last 20 Digits</p>
+              <div className="flex flex-wrap gap-1.5">
+                {digits.map((digit, idx) => (
+                  <span 
+                    key={idx}
+                    className={`w-7 h-7 flex items-center justify-center rounded text-xs font-orbitron font-bold border ${
+                      digit % 2 === 0 
+                        ? 'bg-primary/10 text-primary border-primary/30' 
+                        : 'bg-accent/10 text-accent border-accent/30'
+                    }`}
+                  >
+                    {digit}
+                  </span>
+                ))}
               </div>
+            </div>
 
-              {/* Even/Odd Pattern */}
+            {/* Even/Odd + Rise/Fall */}
+            <div className="grid grid-cols-2 gap-3">
               <div className="space-y-2">
-                <p className="text-sm font-medium">Even/Odd Pattern</p>
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="p-3 rounded-lg bg-blue-500/10 border border-blue-500/30">
-                    <p className="text-xs text-muted-foreground">Even</p>
-                    <div className="flex items-baseline gap-2">
-                      <p className="text-2xl font-bold text-blue-400">{evenProbability}%</p>
-                      <p className="text-xs text-muted-foreground">({evenCount}/{digits.length})</p>
-                    </div>
-                  </div>
-                  <div className="p-3 rounded-lg bg-purple-500/10 border border-purple-500/30">
-                    <p className="text-xs text-muted-foreground">Odd</p>
-                    <div className="flex items-baseline gap-2">
-                      <p className="text-2xl font-bold text-purple-400">{oddProbability}%</p>
-                      <p className="text-xs text-muted-foreground">({oddCount}/{digits.length})</p>
-                    </div>
-                  </div>
+                <p className="text-xs font-orbitron text-muted-foreground tracking-wider">EVEN/ODD</p>
+                <div className="p-3 rounded-lg bg-primary/5 border border-primary/20">
+                  <p className="text-[10px] text-muted-foreground">Even</p>
+                  <p className="text-xl font-orbitron font-bold text-primary">{evenProbability}%</p>
+                </div>
+                <div className="p-3 rounded-lg bg-accent/5 border border-accent/20">
+                  <p className="text-[10px] text-muted-foreground">Odd</p>
+                  <p className="text-xl font-orbitron font-bold text-accent">{oddProbability}%</p>
                 </div>
               </div>
-
-              {/* Over/Under (Rise/Fall) Pattern */}
               <div className="space-y-2">
-                <p className="text-sm font-medium">Rise/Fall Pattern</p>
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="p-3 rounded-lg bg-green-500/10 border border-green-500/30">
-                    <p className="text-xs text-muted-foreground">Rise (Over)</p>
-                    <div className="flex items-baseline gap-2">
-                      <p className="text-2xl font-bold text-green-400">{riseProbability}%</p>
-                      <p className="text-xs text-muted-foreground">({riseCount}/{priceChanges.length})</p>
-                    </div>
-                  </div>
-                  <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/30">
-                    <p className="text-xs text-muted-foreground">Fall (Under)</p>
-                    <div className="flex items-baseline gap-2">
-                      <p className="text-2xl font-bold text-red-400">{fallProbability}%</p>
-                      <p className="text-xs text-muted-foreground">({fallCount}/{priceChanges.length})</p>
-                    </div>
-                  </div>
+                <p className="text-xs font-orbitron text-muted-foreground tracking-wider">RISE/FALL</p>
+                <div className="p-3 rounded-lg bg-success/5 border border-success/20">
+                  <p className="text-[10px] text-muted-foreground">Rise</p>
+                  <p className="text-xl font-orbitron font-bold text-success">{riseProbability}%</p>
+                </div>
+                <div className="p-3 rounded-lg bg-destructive/5 border border-destructive/20">
+                  <p className="text-[10px] text-muted-foreground">Fall</p>
+                  <p className="text-xl font-orbitron font-bold text-destructive">{fallProbability}%</p>
                 </div>
               </div>
-            </CardContent>
-          </Card>
+            </div>
+          </div>
         );
       })}
     </div>
