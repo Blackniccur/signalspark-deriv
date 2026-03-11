@@ -1,5 +1,7 @@
 import { Button } from "@/components/ui/button";
-import { Activity, Link2 } from "lucide-react";
+import { Link2, Shield, LogOut } from "lucide-react";
+import { useAuth } from "@/hooks/useAuth";
+import { useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
 
 interface MarketHeaderProps {
