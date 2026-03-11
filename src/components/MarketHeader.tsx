@@ -1,5 +1,7 @@
 import { Button } from "@/components/ui/button";
-import { Activity, Link2 } from "lucide-react";
+import { Link2, Shield, LogOut } from "lucide-react";
+import { useAuth } from "@/hooks/useAuth";
+import { useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
 
 interface MarketHeaderProps {
@@ -9,6 +11,8 @@ interface MarketHeaderProps {
 
 export const MarketHeader = ({ connected, onToggleConnection }: MarketHeaderProps) => {
   const [time, setTime] = useState(new Date().toLocaleTimeString());
+  const { isAdmin, signOut } = useAuth();
+  const navigate = useNavigate();
 
   useEffect(() => {
     const interval = setInterval(() => setTime(new Date().toLocaleTimeString()), 1000);
@@ -51,6 +55,28 @@ export const MarketHeader = ({ connected, onToggleConnection }: MarketHeaderProp
             >
               <Link2 className="w-3 h-3 mr-1" />
               {connected ? 'DISCONNECT' : 'CONNECT'}
+            </Button>
+            {isAdmin && (
+              <>
+                <span className="text-muted-foreground">|</span>
+                <Button
+                  onClick={() => navigate('/admin')}
+                  size="sm"
+                  variant="ghost"
+                  className="font-orbitron tracking-wider text-xs bg-accent/20 text-accent border border-accent/50 hover:bg-accent/30"
+                >
+                  <Shield className="w-3 h-3 mr-1" /> ADMIN
+                </Button>
+              </>
+            )}
+            <span className="text-muted-foreground">|</span>
+            <Button
+              onClick={signOut}
+              size="sm"
+              variant="ghost"
+              className="font-orbitron tracking-wider text-xs text-muted-foreground hover:text-destructive"
+            >
+              <LogOut className="w-3 h-3 mr-1" /> LOGOUT
             </Button>
           </div>
         </div>
