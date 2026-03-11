@@ -11,6 +11,8 @@ interface MarketHeaderProps {
 
 export const MarketHeader = ({ connected, onToggleConnection }: MarketHeaderProps) => {
   const [time, setTime] = useState(new Date().toLocaleTimeString());
+  const { isAdmin, signOut } = useAuth();
+  const navigate = useNavigate();
 
   useEffect(() => {
     const interval = setInterval(() => setTime(new Date().toLocaleTimeString()), 1000);
