@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react";
-import { AlertCircle, CheckCircle2, TrendingUp, TrendingDown, Calculator, Shuffle } from "lucide-react";
+import { AlertCircle, TrendingUp, TrendingDown, Calculator, Shuffle, ArrowUpCircle, ArrowDownCircle } from "lucide-react";
 
 interface SignalCardProps {
   market: string;
-  signalType: "over" | "under" | "even" | "odd" | "matches" | "differs";
+  signalType: "over" | "under" | "even" | "odd" | "matches" | "differs" | "rise" | "fall";
   category: "digit" | "direction";
   probability: number;
   entryPoint: string;
@@ -17,12 +17,15 @@ interface SignalCardProps {
 const getGlowClass = (signalType: string) => {
   if (["even", "odd"].includes(signalType)) return "glow-green border-t-4 border-t-success";
   if (["over", "under"].includes(signalType)) return "glow-pink border-t-4 border-t-accent";
+  if (["rise", "fall"].includes(signalType)) return "glow-cyan border-t-4 border-t-yellow-400";
   return "glow-cyan border-t-4 border-t-primary";
 };
 
 const getIcon = (signalType: string) => {
   if (signalType === "over") return <TrendingUp className="w-5 h-5" />;
   if (signalType === "under") return <TrendingDown className="w-5 h-5" />;
+  if (signalType === "rise") return <ArrowUpCircle className="w-5 h-5" />;
+  if (signalType === "fall") return <ArrowDownCircle className="w-5 h-5" />;
   if (["even", "odd"].includes(signalType)) return <Calculator className="w-5 h-5" />;
   return <Shuffle className="w-5 h-5" />;
 };
@@ -30,13 +33,22 @@ const getIcon = (signalType: string) => {
 const getColor = (signalType: string) => {
   if (["even", "odd"].includes(signalType)) return "text-success";
   if (["over", "under"].includes(signalType)) return "text-accent";
+  if (["rise", "fall"].includes(signalType)) return "text-yellow-400";
   return "text-primary";
 };
 
 const getBarColor = (signalType: string) => {
   if (["even", "odd"].includes(signalType)) return "bg-gradient-to-r from-success to-emerald-400";
   if (["over", "under"].includes(signalType)) return "bg-gradient-to-r from-accent to-purple-500";
+  if (["rise", "fall"].includes(signalType)) return "bg-gradient-to-r from-yellow-400 to-orange-500";
   return "confidence-bar";
+};
+
+const getIconBg = (signalType: string) => {
+  if (["even", "odd"].includes(signalType)) return "bg-success/20 border-success/50 text-success";
+  if (["over", "under"].includes(signalType)) return "bg-accent/20 border-accent/50 text-accent";
+  if (["rise", "fall"].includes(signalType)) return "bg-yellow-400/20 border-yellow-400/50 text-yellow-400";
+  return "bg-primary/20 border-primary/50 text-primary";
 };
 
 export const SignalCard = ({ market, signalType, category, probability, entryPoint, expiresAt, validation, entryDigit, predictionDigit, price }: SignalCardProps) => {
@@ -58,7 +70,6 @@ export const SignalCard = ({ market, signalType, category, probability, entryPoi
 
   return (
     <div className={`glass-panel rounded-2xl p-5 transition-all duration-300 hover:-translate-y-1 ${getGlowClass(signalType)} ${isExpired ? 'opacity-40' : ''}`}>
-      {/* Header */}
       <div className="flex justify-between items-start mb-4">
         <div>
           <h3 className={`font-orbitron text-base font-bold ${color} uppercase`}>
@@ -66,16 +77,11 @@ export const SignalCard = ({ market, signalType, category, probability, entryPoi
           </h3>
           <p className="text-muted-foreground text-xs">{market}</p>
         </div>
-        <div className={`w-10 h-10 rounded-full flex items-center justify-center border ${
-          signalType === "even" || signalType === "odd" ? 'bg-success/20 border-success/50 text-success' :
-          signalType === "over" || signalType === "under" ? 'bg-accent/20 border-accent/50 text-accent' :
-          'bg-primary/20 border-primary/50 text-primary'
-        }`}>
+        <div className={`w-10 h-10 rounded-full flex items-center justify-center border ${getIconBg(signalType)}`}>
           {getIcon(signalType)}
         </div>
       </div>
 
-      {/* Prediction */}
       <div className="flex justify-between items-center bg-background/50 rounded-lg p-3 mb-4 border border-white/5">
         <span className="text-muted-foreground text-sm">Prediction</span>
         <span className={`font-orbitron text-xl font-bold ${color}`}>
@@ -83,7 +89,6 @@ export const SignalCard = ({ market, signalType, category, probability, entryPoi
         </span>
       </div>
 
-      {/* Confidence */}
       <div className="space-y-1 mb-4">
         <div className="flex justify-between text-xs">
           <span className="text-muted-foreground">Confidence</span>
@@ -94,7 +99,6 @@ export const SignalCard = ({ market, signalType, category, probability, entryPoi
         </div>
       </div>
 
-      {/* Stats Grid */}
       <div className="grid grid-cols-2 gap-2 mb-4">
         <div className="bg-background/50 rounded p-2 text-center border border-white/5">
           <div className="text-[10px] text-muted-foreground uppercase">Entry Digit</div>
@@ -110,7 +114,6 @@ export const SignalCard = ({ market, signalType, category, probability, entryPoi
         </div>
       </div>
 
-      {/* Validation Badge */}
       <div className="flex items-center justify-between text-xs">
         <span className={`px-2 py-1 rounded border ${
           validation === "strong" ? 'bg-success/10 text-success border-success/30' :
@@ -125,7 +128,7 @@ export const SignalCard = ({ market, signalType, category, probability, entryPoi
       {isExpired && (
         <div className="mt-3 p-2 bg-destructive/10 border border-destructive/30 rounded-md flex items-center gap-2">
           <AlertCircle className="h-3 w-3 text-destructive" />
-          <span className="text-xs text-destructive font-orbitron">EXPIRED</span>
+          <span className="text-xs text-destructive font-orbitron">EXPIRED - REGENERATING</span>
         </div>
       )}
     </div>
