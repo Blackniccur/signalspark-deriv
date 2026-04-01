@@ -23,6 +23,7 @@ const Index = () => {
     ? filteredSignals
     : contractFilter === "evenodd" ? filteredSignals.filter(s => ["even", "odd"].includes(s.signalType))
     : contractFilter === "overunder" ? filteredSignals.filter(s => ["over", "under"].includes(s.signalType))
+    : contractFilter === "risefall" ? filteredSignals.filter(s => ["rise", "fall"].includes(s.signalType))
     : filteredSignals.filter(s => ["matches", "differs"].includes(s.signalType));
 
   return (
