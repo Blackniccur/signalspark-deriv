@@ -23,6 +23,7 @@ const Index = () => {
     ? filteredSignals
     : contractFilter === "evenodd" ? filteredSignals.filter(s => ["even", "odd"].includes(s.signalType))
     : contractFilter === "overunder" ? filteredSignals.filter(s => ["over", "under"].includes(s.signalType))
+    : contractFilter === "risefall" ? filteredSignals.filter(s => ["rise", "fall"].includes(s.signalType))
     : filteredSignals.filter(s => ["matches", "differs"].includes(s.signalType));
 
   return (
@@ -71,6 +72,7 @@ const Index = () => {
                     <SelectItem value="all">All Signals</SelectItem>
                     <SelectItem value="evenodd">Even/Odd</SelectItem>
                     <SelectItem value="overunder">Over/Under</SelectItem>
+                    <SelectItem value="risefall">Rise/Fall</SelectItem>
                     <SelectItem value="matches">Matches/Differs</SelectItem>
                   </SelectContent>
                 </Select>

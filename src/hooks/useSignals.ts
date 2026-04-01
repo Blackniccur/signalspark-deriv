@@ -3,7 +3,7 @@ import { useState, useEffect, useCallback } from 'react';
 export interface Signal {
   id: string;
   market: string;
-  signalType: "over" | "under" | "even" | "odd" | "matches" | "differs";
+  signalType: "over" | "under" | "even" | "odd" | "matches" | "differs" | "rise" | "fall";
   category: "digit" | "direction";
   probability: number;
   entryPoint: string;
@@ -36,26 +36,18 @@ const marketNames: Record<string, string> = {
 };
 
 const analyzeTickData = (symbol: string, currentPrice: number, historicalPrices: number[]): Signal[] => {
-  // Need at least 50 ticks for analysis
-  if (historicalPrices.length < 50) {
-    return [];
-  }
+  if (historicalPrices.length < 50) return [];
 
   const entryDigit = Math.floor((currentPrice * 100) % 10);
-  const last50Prices = historicalPrices.slice(-50);
+  const last50 = historicalPrices.slice(-50);
   
-  // Calculate statistics
-  const avgPrice = last50Prices.reduce((a, b) => a + b, 0) / 50;
-  const priceChanges = last50Prices.slice(1).map((p, i) => p - last50Prices[i]);
-  const volatility = Math.sqrt(priceChanges.reduce((sum, change) => sum + change * change, 0) / 49);
-  const trend = (currentPrice - last50Prices[0]) / last50Prices[0];
+  const avgPrice = last50.reduce((a, b) => a + b, 0) / 50;
+  const priceChanges = last50.slice(1).map((p, i) => p - last50[i]);
+  const volatility = Math.sqrt(priceChanges.reduce((sum, c) => sum + c * c, 0) / 49);
   
-  // Calculate digit frequencies
-  const digits = last50Prices.map(p => Math.floor((p * 100) % 10));
-  const digitCounts = digits.reduce((acc, d) => {
-    acc[d] = (acc[d] || 0) + 1;
-    return acc;
-  }, {} as Record<number, number>);
+  // Digit frequencies
+  const digits = last50.map(p => Math.floor((p * 100) % 10));
+  const digitCounts = digits.reduce((acc, d) => { acc[d] = (acc[d] || 0) + 1; return acc; }, {} as Record<number, number>);
   
   const recentDigits = digits.slice(-10);
   const evenInRecent = recentDigits.filter(d => d % 2 === 0).length;
@@ -63,70 +55,149 @@ const analyzeTickData = (symbol: string, currentPrice: number, historicalPrices:
   
   const signals: Signal[] = [];
   const now = Date.now();
-  const expiresAt = now + 100000; // 100 seconds
+  const expiresAt = now + 100000;
   const entryTime = new Date(now).toLocaleTimeString();
-  
-  // Even/Odd Signal
+  const market = marketNames[symbol] || symbol;
+
+  // === EVEN/ODD SIGNAL ===
   const evenCount = digits.filter(d => d % 2 === 0).length;
-  const oddCount = 50 - evenCount;
-  const predictedEvenOdd = evenInRecent > oddInRecent ? "even" : "odd";
-  const evenOddConfidence = Math.abs(evenInRecent - oddInRecent) / 10;
-  
-  const evenOddSignal: Signal = {
+  const evenRatio = evenCount / 50;
+  const recentEvenRatio = evenInRecent / 10;
+  // Weighted: 60% recent, 40% historical
+  const weightedEvenProb = recentEvenRatio * 0.6 + evenRatio * 0.4;
+  const predictedEvenOdd = weightedEvenProb > 0.5 ? "even" : "odd";
+  const evenOddConfidence = Math.abs(weightedEvenProb - 0.5) * 2;
+
+  signals.push({
     id: `${symbol}-evenodd`,
-    market: marketNames[symbol] || symbol,
+    market,
     signalType: predictedEvenOdd,
     category: "digit",
-    probability: Math.min(88, Math.max(58, 60 + evenOddConfidence * 28)),
+    probability: Math.min(88, Math.max(55, 55 + evenOddConfidence * 33)),
     entryPoint: entryTime,
     expiresAt,
     validation: evenOddConfidence > 0.4 ? "strong" : evenOddConfidence > 0.2 ? "medium" : "weak",
     entryDigit,
     price: currentPrice
-  };
-  signals.push(evenOddSignal);
+  });
+
+  // === OVER/UNDER SIGNAL (improved) ===
+  // Use multiple timeframe analysis
+  const last5 = last50.slice(-5);
+  const last10 = last50.slice(-10);
+  const last20 = last50.slice(-20);
   
-  // Over/Under Signal
-  const recentTrend = (last50Prices.slice(-5).reduce((a, b) => a + b, 0) / 5) - avgPrice;
-  const predictedDirection = recentTrend > 0 ? "over" : "under";
-  const trendStrength = Math.abs(recentTrend / avgPrice);
+  const sma5 = last5.reduce((a, b) => a + b, 0) / 5;
+  const sma10 = last10.reduce((a, b) => a + b, 0) / 10;
+  const sma20 = last20.reduce((a, b) => a + b, 0) / 20;
+  const sma50 = avgPrice;
   
-  const overUnderSignal: Signal = {
+  // RSI calculation
+  const gains = priceChanges.filter(c => c > 0);
+  const losses = priceChanges.filter(c => c < 0).map(c => Math.abs(c));
+  const avgGain = gains.length > 0 ? gains.reduce((a, b) => a + b, 0) / 14 : 0;
+  const avgLoss = losses.length > 0 ? losses.reduce((a, b) => a + b, 0) / 14 : 0;
+  const rs = avgLoss === 0 ? 100 : avgGain / avgLoss;
+  const rsi = 100 - (100 / (1 + rs));
+  
+  // Momentum score: combine SMA crossovers + RSI
+  let overScore = 0;
+  if (sma5 > sma10) overScore += 1;
+  if (sma10 > sma20) overScore += 1;
+  if (sma5 > sma50) overScore += 1;
+  if (currentPrice > sma5) overScore += 1;
+  if (rsi > 50) overScore += 0.5;
+  if (rsi > 65) overScore += 0.5;
+  
+  // Digit-based over/under: check if last digit tends to be > 4 or < 5
+  const overDigits = digits.slice(-20).filter(d => d > 4).length;
+  const overDigitRatio = overDigits / 20;
+  if (overDigitRatio > 0.55) overScore += 1;
+  
+  const totalFactors = 6;
+  const overProbability = overScore / totalFactors;
+  const predictedDirection = overProbability > 0.5 ? "over" : "under";
+  const directionConfidence = Math.abs(overProbability - 0.5) * 2;
+
+  signals.push({
     id: `${symbol}-overunder`,
-    market: marketNames[symbol] || symbol,
+    market,
     signalType: predictedDirection,
     category: "direction",
-    probability: Math.min(85, 62 + trendStrength * 2000),
+    probability: Math.min(87, Math.max(55, 55 + directionConfidence * 32)),
     entryPoint: entryTime,
     expiresAt,
-    validation: trendStrength > 0.015 ? "strong" : trendStrength > 0.008 ? "medium" : "weak",
+    validation: directionConfidence > 0.5 ? "strong" : directionConfidence > 0.25 ? "medium" : "weak",
     entryDigit,
-    predictionDigit: entryDigit,
+    predictionDigit: predictedDirection === "over" ? Math.min(9, entryDigit + 1) : Math.max(0, entryDigit - 1),
     price: currentPrice
-  };
-  signals.push(overUnderSignal);
-  
-  // Matches/Differs Signal
-  const mostFrequentDigit = Object.entries(digitCounts).sort((a, b) => b[1] - a[1])[0];
-  const predictionDigit = parseInt(mostFrequentDigit[0]);
-  const digitFrequency = mostFrequentDigit[1] / 50;
-  const predictedType = entryDigit === predictionDigit ? "differs" : "matches";
-  
-  const matchesDiffersSignal: Signal = {
+  });
+
+  // === MATCHES/DIFFERS SIGNAL ===
+  const mostFreqDigit = Object.entries(digitCounts).sort((a, b) => b[1] - a[1])[0];
+  const predDigit = parseInt(mostFreqDigit[0]);
+  const digitFreq = mostFreqDigit[1] / 50;
+  const predictedType = entryDigit === predDigit ? "differs" : "matches";
+
+  signals.push({
     id: `${symbol}-matchesdiffer`,
-    market: marketNames[symbol] || symbol,
+    market,
     signalType: predictedType,
     category: "digit",
-    probability: Math.min(78, 58 + digitFrequency * 40),
+    probability: Math.min(78, Math.max(55, 55 + digitFreq * 46)),
     entryPoint: entryTime,
     expiresAt,
-    validation: digitFrequency > 0.25 ? "strong" : digitFrequency > 0.18 ? "medium" : "weak",
+    validation: digitFreq > 0.25 ? "strong" : digitFreq > 0.18 ? "medium" : "weak",
     entryDigit,
-    predictionDigit,
+    predictionDigit: predDigit,
     price: currentPrice
-  };
-  signals.push(matchesDiffersSignal);
+  });
+
+  // === RISE/FALL SIGNAL ===
+  // Use price momentum and trend analysis
+  const recentChanges = priceChanges.slice(-10);
+  const positiveChanges = recentChanges.filter(c => c > 0).length;
+  const negativeChanges = recentChanges.filter(c => c < 0).length;
   
+  // Consecutive direction count
+  let consecutiveRise = 0;
+  let consecutiveFall = 0;
+  for (let i = recentChanges.length - 1; i >= 0; i--) {
+    if (recentChanges[i] > 0 && consecutiveFall === 0) consecutiveRise++;
+    else if (recentChanges[i] < 0 && consecutiveRise === 0) consecutiveFall++;
+    else break;
+  }
+  
+  // Mean reversion: if too many consecutive in one direction, predict reversal
+  let riseScore = 0;
+  if (consecutiveRise >= 4) {
+    riseScore = -1; // likely to fall (mean reversion)
+  } else if (consecutiveFall >= 4) {
+    riseScore = 1; // likely to rise (mean reversion)
+  } else {
+    // Trend following for moderate momentum
+    riseScore = (positiveChanges - negativeChanges) / 10;
+    // Add SMA trend
+    if (sma5 > sma10) riseScore += 0.2;
+    else riseScore -= 0.2;
+  }
+  
+  const riseFallConfidence = Math.min(1, Math.abs(riseScore));
+  const predictedRiseFall = riseScore > 0 ? "rise" : "fall";
+
+  signals.push({
+    id: `${symbol}-risefall`,
+    market,
+    signalType: predictedRiseFall,
+    category: "direction",
+    probability: Math.min(85, Math.max(55, 55 + riseFallConfidence * 30)),
+    entryPoint: entryTime,
+    expiresAt,
+    validation: riseFallConfidence > 0.6 ? "strong" : riseFallConfidence > 0.3 ? "medium" : "weak",
+    entryDigit,
+    price: currentPrice
+  });
+
   return signals;
 };
 
@@ -153,21 +224,16 @@ export const useSignals = (connected: boolean) => {
         
         if (message.type === 'tick' && message.data) {
           const tick: TickData = message.data;
-          
-          // Track digit patterns (last 20 digits)
           const lastDigit = Math.floor((tick.quote * 100) % 10);
+          
           setDigitPatterns(prev => {
             const current = prev[tick.symbol] || { digits: [], prices: [], timestamps: [] };
-            const newDigits = [...current.digits, lastDigit].slice(-20);
-            const newPrices = [...current.prices, tick.quote].slice(-20);
-            const newTimestamps = [...current.timestamps, Date.now()].slice(-20);
-            
             return {
               ...prev,
               [tick.symbol]: {
-                digits: newDigits,
-                prices: newPrices,
-                timestamps: newTimestamps
+                digits: [...current.digits, lastDigit].slice(-20),
+                prices: [...current.prices, tick.quote].slice(-20),
+                timestamps: [...current.timestamps, Date.now()].slice(-20)
               }
             };
           });
@@ -181,28 +247,20 @@ export const useSignals = (connected: boolean) => {
               [tick.symbol]: newHistory.length
             }));
             
-            // Only generate signals if we have 50+ ticks
             if (newHistory.length >= 50) {
               setLastSignalTime(prevLastSignalTime => {
                 const now = Date.now();
                 const symbolSignalTimes = prevLastSignalTime[tick.symbol] || {};
                 
                 setSignals(prevSignals => {
-                  // Remove expired signals
                   const activeSignals = prevSignals.filter(s => s.expiresAt > now);
-                  
-                  // Generate new signals only for expired signal types
                   const newSignals = analyzeTickData(tick.symbol, tick.quote, newHistory);
                   const signalsToAdd: Signal[] = [];
                   
                   newSignals.forEach(newSignal => {
                     const signalKey = `${tick.symbol}-${newSignal.signalType}`;
                     const lastTime = symbolSignalTimes[signalKey] || 0;
-                    
-                    // Only add if no active signal exists for this type or the last one expired
-                    const hasActiveSignal = activeSignals.some(
-                      s => s.id === newSignal.id
-                    );
+                    const hasActiveSignal = activeSignals.some(s => s.id === newSignal.id);
                     
                     if (!hasActiveSignal && now - lastTime >= 100000) {
                       signalsToAdd.push(newSignal);
@@ -210,13 +268,12 @@ export const useSignals = (connected: boolean) => {
                     }
                   });
                   
-                  // Sort signals consistently to prevent jumping
-                  const allSignals = [...activeSignals, ...signalsToAdd].sort((a, b) => {
-                    if (a.market !== b.market) return a.market.localeCompare(b.market);
-                    return a.id.localeCompare(b.id);
-                  });
-                  
-                  return allSignals.slice(-50);
+                  return [...activeSignals, ...signalsToAdd]
+                    .sort((a, b) => {
+                      if (a.market !== b.market) return a.market.localeCompare(b.market);
+                      return a.id.localeCompare(b.id);
+                    })
+                    .slice(-60);
                 });
                 
                 return { ...prevLastSignalTime, [tick.symbol]: symbolSignalTimes };
