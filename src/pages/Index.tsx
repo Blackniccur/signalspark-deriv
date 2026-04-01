@@ -72,6 +72,7 @@ const Index = () => {
                     <SelectItem value="all">All Signals</SelectItem>
                     <SelectItem value="evenodd">Even/Odd</SelectItem>
                     <SelectItem value="overunder">Over/Under</SelectItem>
+                    <SelectItem value="risefall">Rise/Fall</SelectItem>
                     <SelectItem value="matches">Matches/Differs</SelectItem>
                   </SelectContent>
                 </Select>
