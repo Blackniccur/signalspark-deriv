@@ -8,62 +8,57 @@ export function useAuth() {
   const [isActive, setIsActive] = useState(true);
   const [loading, setLoading] = useState(true);
 
-  const fetchUserDetails = async (currentUser: User) => {
-    try {
-      const [{ data: roleData }, { data: profile }] = await Promise.all([
-        supabase
-          .from("user_roles")
-          .select("role")
-          .eq("user_id", currentUser.id),
-        supabase
-          .from("profiles")
-          .select("is_active")
-          .eq("id", currentUser.id)
-          .single(),
-      ]);
-
+  const fetchUserDetails = (currentUser: User) => {
+    // Don't await - fire and forget to avoid blocking auth state changes
+    Promise.all([
+      supabase
+        .from("user_roles")
+        .select("role")
+        .eq("user_id", currentUser.id),
+      supabase
+        .from("profiles")
+        .select("is_active")
+        .eq("id", currentUser.id)
+        .single(),
+    ]).then(([{ data: roleData }, { data: profile }]) => {
       setIsAdmin(roleData?.some((r: any) => r.role === "admin") ?? false);
       setIsActive(profile?.is_active ?? false);
-    } catch (err) {
+      setLoading(false);
+    }).catch((err) => {
       console.error("Error fetching user details:", err);
-    }
+      setLoading(false);
+    });
   };
 
   useEffect(() => {
-    let mounted = true;
-
     // Get initial session
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
-      if (!mounted) return;
+    supabase.auth.getSession().then(({ data: { session } }) => {
       const currentUser = session?.user ?? null;
       setUser(currentUser);
       if (currentUser) {
-        await fetchUserDetails(currentUser);
+        fetchUserDetails(currentUser);
+      } else {
+        setLoading(false);
       }
-      setLoading(false);
     });
 
-    // Listen for auth changes
+    // Listen for auth changes - DO NOT use async callback
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (_event, session) => {
-        if (!mounted) return;
+      (_event, session) => {
         const currentUser = session?.user ?? null;
         setUser(currentUser);
 
         if (currentUser) {
-          await fetchUserDetails(currentUser);
+          fetchUserDetails(currentUser);
         } else {
           setIsAdmin(false);
           setIsActive(true);
+          setLoading(false);
         }
-        setLoading(false);
       }
     );
 
-    return () => {
-      mounted = false;
-      subscription.unsubscribe();
-    };
+    return () => subscription.unsubscribe();
   }, []);
 
   const signIn = async (email: string, password: string) => {
