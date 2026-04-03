@@ -8,40 +8,55 @@ export function useAuth() {
   const [isActive, setIsActive] = useState(true);
   const [loading, setLoading] = useState(true);
 
+  const fetchUserDetails = (currentUser: User) => {
+    // Don't await - fire and forget to avoid blocking auth state changes
+    Promise.all([
+      supabase
+        .from("user_roles")
+        .select("role")
+        .eq("user_id", currentUser.id),
+      supabase
+        .from("profiles")
+        .select("is_active")
+        .eq("id", currentUser.id)
+        .single(),
+    ]).then(([{ data: roleData }, { data: profile }]) => {
+      setIsAdmin(roleData?.some((r: any) => r.role === "admin") ?? false);
+      setIsActive(profile?.is_active ?? false);
+      setLoading(false);
+    }).catch((err) => {
+      console.error("Error fetching user details:", err);
+      setLoading(false);
+    });
+  };
+
   useEffect(() => {
+    // Get initial session
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      const currentUser = session?.user ?? null;
+      setUser(currentUser);
+      if (currentUser) {
+        fetchUserDetails(currentUser);
+      } else {
+        setLoading(false);
+      }
+    });
+
+    // Listen for auth changes - DO NOT use async callback
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (_event, session) => {
+      (_event, session) => {
         const currentUser = session?.user ?? null;
         setUser(currentUser);
 
         if (currentUser) {
-          // Check role
-          const { data: roleData } = await supabase
-            .from("user_roles")
-            .select("role")
-            .eq("user_id", currentUser.id);
-
-          setIsAdmin(roleData?.some((r: any) => r.role === "admin") ?? false);
-
-          // Check active status
-          const { data: profile } = await supabase
-            .from("profiles")
-            .select("is_active")
-            .eq("id", currentUser.id)
-            .single();
-
-          setIsActive(profile?.is_active ?? false);
+          fetchUserDetails(currentUser);
         } else {
           setIsAdmin(false);
           setIsActive(true);
+          setLoading(false);
         }
-        setLoading(false);
       }
     );
-
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (!session) setLoading(false);
-    });
 
     return () => subscription.unsubscribe();
   }, []);

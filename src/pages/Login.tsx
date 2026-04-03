@@ -18,13 +18,19 @@ const Login = () => {
     e.preventDefault();
     setError("");
     setLoading(true);
-    const { error } = await signIn(email, password);
-    if (error) {
-      setError(error.message);
-    } else {
-      navigate("/");
+    try {
+      const { error } = await signIn(email, password);
+      if (error) {
+        setError(error.message);
+        setLoading(false);
+      } else {
+        // Small delay to let auth state propagate
+        setTimeout(() => navigate("/"), 500);
+      }
+    } catch (err: any) {
+      setError(err?.message || "Login failed. Please try again.");
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   return (
