@@ -35,6 +35,36 @@ const marketNames: Record<string, string> = {
   "1HZ100V": "Volatility 100 (1s) Index"
 };
 
+const calcBollingerBands = (prices: number[], period = 20) => {
+  const slice = prices.slice(-period);
+  const sma = slice.reduce((a, b) => a + b, 0) / period;
+  const stdDev = Math.sqrt(slice.reduce((sum, p) => sum + (p - sma) ** 2, 0) / period);
+  return { upper: sma + 2 * stdDev, middle: sma, lower: sma - 2 * stdDev, stdDev };
+};
+
+const calcMACD = (prices: number[]) => {
+  const ema = (data: number[], period: number) => {
+    const k = 2 / (period + 1);
+    let val = data[0];
+    for (let i = 1; i < data.length; i++) val = data[i] * k + val * (1 - k);
+    return val;
+  };
+  const ema12 = ema(prices, 12);
+  const ema26 = ema(prices, 26);
+  const macdLine = ema12 - ema26;
+  // Approximate signal line from last 9 MACD values
+  const macdHistory: number[] = [];
+  for (let i = Math.max(0, prices.length - 9); i <= prices.length; i++) {
+    const slice = prices.slice(0, i);
+    if (slice.length >= 26) {
+      macdHistory.push(ema(slice, 12) - ema(slice, 26));
+    }
+  }
+  const signalLine = macdHistory.length >= 2 ? ema(macdHistory, Math.min(9, macdHistory.length)) : macdLine;
+  const histogram = macdLine - signalLine;
+  return { macdLine, signalLine, histogram };
+};
+
 const analyzeTickData = (symbol: string, currentPrice: number, historicalPrices: number[]): Signal[] => {
   if (historicalPrices.length < 50) return [];
 
@@ -45,13 +75,17 @@ const analyzeTickData = (symbol: string, currentPrice: number, historicalPrices:
   const priceChanges = last50.slice(1).map((p, i) => p - last50[i]);
   const volatility = Math.sqrt(priceChanges.reduce((sum, c) => sum + c * c, 0) / 49);
   
+  // Bollinger Bands & MACD
+  const bb = calcBollingerBands(last50, 20);
+  const macd = calcMACD(last50);
+  const bbPosition = bb.stdDev > 0 ? (currentPrice - bb.lower) / (bb.upper - bb.lower) : 0.5;
+  
   // Digit frequencies
   const digits = last50.map(p => Math.floor((p * 100) % 10));
   const digitCounts = digits.reduce((acc, d) => { acc[d] = (acc[d] || 0) + 1; return acc; }, {} as Record<number, number>);
   
   const recentDigits = digits.slice(-10);
   const evenInRecent = recentDigits.filter(d => d % 2 === 0).length;
-  const oddInRecent = recentDigits.filter(d => d % 2 !== 0).length;
   
   const signals: Signal[] = [];
   const now = Date.now();
@@ -59,12 +93,17 @@ const analyzeTickData = (symbol: string, currentPrice: number, historicalPrices:
   const entryTime = new Date(now).toLocaleTimeString();
   const market = marketNames[symbol] || symbol;
 
-  // === EVEN/ODD SIGNAL ===
+  // === EVEN/ODD SIGNAL (enhanced with BB) ===
   const evenCount = digits.filter(d => d % 2 === 0).length;
   const evenRatio = evenCount / 50;
   const recentEvenRatio = evenInRecent / 10;
-  // Weighted: 60% recent, 40% historical
-  const weightedEvenProb = recentEvenRatio * 0.6 + evenRatio * 0.4;
+  let weightedEvenProb = recentEvenRatio * 0.5 + evenRatio * 0.3;
+  // BB influence: near bands = more volatile = favor odd, mid-band = favor even
+  if (bbPosition > 0.8 || bbPosition < 0.2) weightedEvenProb -= 0.05;
+  else if (bbPosition > 0.4 && bbPosition < 0.6) weightedEvenProb += 0.05;
+  // MACD influence
+  if (Math.abs(macd.histogram) < volatility * 0.1) weightedEvenProb += 0.03;
+  
   const predictedEvenOdd = weightedEvenProb > 0.5 ? "even" : "odd";
   const evenOddConfidence = Math.abs(weightedEvenProb - 0.5) * 2;
 
@@ -73,7 +112,7 @@ const analyzeTickData = (symbol: string, currentPrice: number, historicalPrices:
     market,
     signalType: predictedEvenOdd,
     category: "digit",
-    probability: Math.min(88, Math.max(55, 55 + evenOddConfidence * 33)),
+    probability: Math.min(90, Math.max(55, 55 + evenOddConfidence * 35)),
     entryPoint: entryTime,
     expiresAt,
     validation: evenOddConfidence > 0.4 ? "strong" : evenOddConfidence > 0.2 ? "medium" : "weak",
@@ -81,8 +120,7 @@ const analyzeTickData = (symbol: string, currentPrice: number, historicalPrices:
     price: currentPrice
   });
 
-  // === OVER/UNDER SIGNAL (improved) ===
-  // Use multiple timeframe analysis
+  // === OVER/UNDER SIGNAL (enhanced with BB + MACD) ===
   const last5 = last50.slice(-5);
   const last10 = last50.slice(-10);
   const last20 = last50.slice(-20);
@@ -92,7 +130,7 @@ const analyzeTickData = (symbol: string, currentPrice: number, historicalPrices:
   const sma20 = last20.reduce((a, b) => a + b, 0) / 20;
   const sma50 = avgPrice;
   
-  // RSI calculation
+  // RSI
   const gains = priceChanges.filter(c => c > 0);
   const losses = priceChanges.filter(c => c < 0).map(c => Math.abs(c));
   const avgGain = gains.length > 0 ? gains.reduce((a, b) => a + b, 0) / 14 : 0;
@@ -100,7 +138,6 @@ const analyzeTickData = (symbol: string, currentPrice: number, historicalPrices:
   const rs = avgLoss === 0 ? 100 : avgGain / avgLoss;
   const rsi = 100 - (100 / (1 + rs));
   
-  // Momentum score: combine SMA crossovers + RSI
   let overScore = 0;
   if (sma5 > sma10) overScore += 1;
   if (sma10 > sma20) overScore += 1;
@@ -109,13 +146,23 @@ const analyzeTickData = (symbol: string, currentPrice: number, historicalPrices:
   if (rsi > 50) overScore += 0.5;
   if (rsi > 65) overScore += 0.5;
   
-  // Digit-based over/under: check if last digit tends to be > 4 or < 5
-  const overDigits = digits.slice(-20).filter(d => d > 4).length;
-  const overDigitRatio = overDigits / 20;
-  if (overDigitRatio > 0.55) overScore += 1;
+  // BB: price near upper band = overbought (under), near lower = oversold (over)
+  if (bbPosition > 0.85) overScore -= 1;
+  else if (bbPosition < 0.15) overScore += 1;
+  else if (bbPosition > 0.6) overScore += 0.3;
+  else if (bbPosition < 0.4) overScore -= 0.3;
   
-  const totalFactors = 6;
-  const overProbability = overScore / totalFactors;
+  // MACD: positive histogram = bullish momentum (over)
+  if (macd.histogram > 0) overScore += 0.8;
+  else overScore -= 0.8;
+  if (macd.macdLine > macd.signalLine) overScore += 0.5;
+  else overScore -= 0.5;
+  
+  const overDigits = digits.slice(-20).filter(d => d > 4).length;
+  if (overDigits / 20 > 0.55) overScore += 0.5;
+  
+  const totalFactors = 8.5;
+  const overProbability = (overScore + totalFactors / 2) / totalFactors;
   const predictedDirection = overProbability > 0.5 ? "over" : "under";
   const directionConfidence = Math.abs(overProbability - 0.5) * 2;
 
@@ -124,7 +171,7 @@ const analyzeTickData = (symbol: string, currentPrice: number, historicalPrices:
     market,
     signalType: predictedDirection,
     category: "direction",
-    probability: Math.min(87, Math.max(55, 55 + directionConfidence * 32)),
+    probability: Math.min(90, Math.max(55, 55 + directionConfidence * 35)),
     entryPoint: entryTime,
     expiresAt,
     validation: directionConfidence > 0.5 ? "strong" : directionConfidence > 0.25 ? "medium" : "weak",
@@ -133,10 +180,17 @@ const analyzeTickData = (symbol: string, currentPrice: number, historicalPrices:
     price: currentPrice
   });
 
-  // === MATCHES/DIFFERS SIGNAL ===
+  // === MATCHES/DIFFERS SIGNAL (enhanced with volatility from BB) ===
   const mostFreqDigit = Object.entries(digitCounts).sort((a, b) => b[1] - a[1])[0];
   const predDigit = parseInt(mostFreqDigit[0]);
   const digitFreq = mostFreqDigit[1] / 50;
+  // Low BB width (squeeze) = digits more predictable = matches more likely
+  const bbWidth = bb.stdDev / bb.middle;
+  let matchBonus = 0;
+  if (bbWidth < 0.001) matchBonus = 0.05;
+  else if (bbWidth > 0.003) matchBonus = -0.05;
+  
+  const adjustedFreq = digitFreq + matchBonus;
   const predictedType = entryDigit === predDigit ? "differs" : "matches";
 
   signals.push({
@@ -144,22 +198,20 @@ const analyzeTickData = (symbol: string, currentPrice: number, historicalPrices:
     market,
     signalType: predictedType,
     category: "digit",
-    probability: Math.min(78, Math.max(55, 55 + digitFreq * 46)),
+    probability: Math.min(82, Math.max(55, 55 + adjustedFreq * 50)),
     entryPoint: entryTime,
     expiresAt,
-    validation: digitFreq > 0.25 ? "strong" : digitFreq > 0.18 ? "medium" : "weak",
+    validation: adjustedFreq > 0.25 ? "strong" : adjustedFreq > 0.18 ? "medium" : "weak",
     entryDigit,
     predictionDigit: predDigit,
     price: currentPrice
   });
 
-  // === RISE/FALL SIGNAL ===
-  // Use price momentum and trend analysis
+  // === RISE/FALL SIGNAL (enhanced with BB + MACD) ===
   const recentChanges = priceChanges.slice(-10);
   const positiveChanges = recentChanges.filter(c => c > 0).length;
   const negativeChanges = recentChanges.filter(c => c < 0).length;
   
-  // Consecutive direction count
   let consecutiveRise = 0;
   let consecutiveFall = 0;
   for (let i = recentChanges.length - 1; i >= 0; i--) {
@@ -168,19 +220,28 @@ const analyzeTickData = (symbol: string, currentPrice: number, historicalPrices:
     else break;
   }
   
-  // Mean reversion: if too many consecutive in one direction, predict reversal
   let riseScore = 0;
   if (consecutiveRise >= 4) {
-    riseScore = -1; // likely to fall (mean reversion)
+    riseScore = -1;
   } else if (consecutiveFall >= 4) {
-    riseScore = 1; // likely to rise (mean reversion)
+    riseScore = 1;
   } else {
-    // Trend following for moderate momentum
     riseScore = (positiveChanges - negativeChanges) / 10;
-    // Add SMA trend
     if (sma5 > sma10) riseScore += 0.2;
     else riseScore -= 0.2;
   }
+  
+  // BB mean reversion: price at extremes likely to revert
+  if (bbPosition > 0.9) riseScore -= 0.6;
+  else if (bbPosition < 0.1) riseScore += 0.6;
+  
+  // MACD momentum confirmation
+  if (macd.histogram > 0 && macd.histogram > volatility * 0.05) riseScore += 0.4;
+  else if (macd.histogram < 0 && Math.abs(macd.histogram) > volatility * 0.05) riseScore -= 0.4;
+  
+  // MACD crossover detection
+  if (macd.macdLine > macd.signalLine) riseScore += 0.3;
+  else riseScore -= 0.3;
   
   const riseFallConfidence = Math.min(1, Math.abs(riseScore));
   const predictedRiseFall = riseScore > 0 ? "rise" : "fall";
@@ -190,7 +251,7 @@ const analyzeTickData = (symbol: string, currentPrice: number, historicalPrices:
     market,
     signalType: predictedRiseFall,
     category: "direction",
-    probability: Math.min(85, Math.max(55, 55 + riseFallConfidence * 30)),
+    probability: Math.min(88, Math.max(55, 55 + riseFallConfidence * 33)),
     entryPoint: entryTime,
     expiresAt,
     validation: riseFallConfidence > 0.6 ? "strong" : riseFallConfidence > 0.3 ? "medium" : "weak",
