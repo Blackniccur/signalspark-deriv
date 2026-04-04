@@ -85,8 +85,23 @@ const analyzeTickData = (symbol: string, currentPrice: number, historicalPrices:
   // Bollinger Bands & MACD
   const bb = calcBollingerBands(last50, 20);
   const macd = calcMACD(last50);
-  const bbPosition = bb.stdDev > 0 ? (currentPrice - bb.lower) / (bb.upper - bb.lower) : 0.5;
+  const bbWidth = bb.stdDev > 0 ? bb.stdDev / bb.middle : 0;
   
+  // RSI (calculated early for use in indicators object)
+  const priceChanges = last50.slice(1).map((p, i) => p - last50[i]);
+  const gains = priceChanges.filter(c => c > 0);
+  const losses = priceChanges.filter(c => c < 0).map(c => Math.abs(c));
+  const avgGain = gains.length > 0 ? gains.reduce((a, b) => a + b, 0) / 14 : 0;
+  const avgLoss = losses.length > 0 ? losses.reduce((a, b) => a + b, 0) / 14 : 0;
+  const rs = avgLoss === 0 ? 100 : avgGain / avgLoss;
+  const rsi = 100 - (100 / (1 + rs));
+  
+  const indicatorData: IndicatorData = {
+    bb: { upper: bb.upper, middle: bb.middle, lower: bb.lower, position: bbPosition, width: bbWidth },
+    macd: { macdLine: macd.macdLine, signalLine: macd.signalLine, histogram: macd.histogram },
+    rsi
+  };
+
   // Digit frequencies
   const digits = last50.map(p => Math.floor((p * 100) % 10));
   const digitCounts = digits.reduce((acc, d) => { acc[d] = (acc[d] || 0) + 1; return acc; }, {} as Record<number, number>);
@@ -97,6 +112,9 @@ const analyzeTickData = (symbol: string, currentPrice: number, historicalPrices:
   const signals: Signal[] = [];
   const now = Date.now();
   const expiresAt = now + 100000;
+  const entryTime = new Date(now).toLocaleTimeString();
+  const market = marketNames[symbol] || symbol;
+  const volatility = Math.sqrt(priceChanges.reduce((sum, c) => sum + c * c, 0) / 49);
   const entryTime = new Date(now).toLocaleTimeString();
   const market = marketNames[symbol] || symbol;
 
