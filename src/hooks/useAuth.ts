@@ -31,6 +31,11 @@ export function useAuth() {
   };
 
   useEffect(() => {
+    // Safety timeout - never stay stuck on loading more than 5 seconds
+    const safetyTimeout = setTimeout(() => {
+      setLoading(false);
+    }, 5000);
+
     // Get initial session
     supabase.auth.getSession().then(({ data: { session } }) => {
       const currentUser = session?.user ?? null;
@@ -40,6 +45,8 @@ export function useAuth() {
       } else {
         setLoading(false);
       }
+    }).catch(() => {
+      setLoading(false);
     });
 
     // Listen for auth changes - DO NOT use async callback
@@ -58,7 +65,10 @@ export function useAuth() {
       }
     );
 
-    return () => subscription.unsubscribe();
+    return () => {
+      clearTimeout(safetyTimeout);
+      subscription.unsubscribe();
+    };
   }, []);
 
   const signIn = async (email: string, password: string) => {

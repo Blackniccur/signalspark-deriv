@@ -1,5 +1,11 @@
 import { useState, useEffect, useCallback } from 'react';
 
+export interface IndicatorData {
+  bb: { upper: number; middle: number; lower: number; position: number; width: number };
+  macd: { macdLine: number; signalLine: number; histogram: number };
+  rsi: number;
+}
+
 export interface Signal {
   id: string;
   market: string;
@@ -12,6 +18,7 @@ export interface Signal {
   entryDigit: number;
   predictionDigit?: number;
   price?: number;
+  indicators?: IndicatorData;
 }
 
 interface TickData {
