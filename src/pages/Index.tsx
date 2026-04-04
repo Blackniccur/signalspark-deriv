@@ -118,6 +118,7 @@ const Index = () => {
                     entryDigit={signal.entryDigit}
                     predictionDigit={signal.predictionDigit}
                     price={signal.price}
+                    indicators={signal.indicators}
                   />
                 ))}
               </div>
