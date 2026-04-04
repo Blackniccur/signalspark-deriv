@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { AlertCircle, TrendingUp, TrendingDown, Calculator, Shuffle, ArrowUpCircle, ArrowDownCircle, BarChart3 } from "lucide-react";
+import { AlertCircle, TrendingUp, TrendingDown, Calculator, Shuffle, ArrowUpCircle, ArrowDownCircle, BarChart3, ChevronDown, ChevronUp, Repeat } from "lucide-react";
 import type { IndicatorData } from "@/hooks/useSignals";
 
 interface SignalCardProps {
@@ -53,9 +53,26 @@ const getIconBg = (signalType: string) => {
   return "bg-primary/20 border-primary/50 text-primary";
 };
 
+const getRecommendedRuns = (probability: number, validation: string, signalType: string): { runs: number; strategy: string } => {
+  if (validation === "strong" && probability >= 80) {
+    return { runs: 1, strategy: "Single entry — high confidence" };
+  }
+  if (validation === "strong" && probability >= 70) {
+    return { runs: 2, strategy: "2 entries with martingale recovery" };
+  }
+  if (validation === "medium" && probability >= 65) {
+    return { runs: 3, strategy: "3 entries with 2.5x martingale" };
+  }
+  if (validation === "medium") {
+    return { runs: 4, strategy: "4 entries with conservative stakes" };
+  }
+  return { runs: 5, strategy: "5 entries — scale in carefully" };
+};
+
 export const SignalCard = ({ market, signalType, category, probability, entryPoint, expiresAt, validation, entryDigit, predictionDigit, price, indicators }: SignalCardProps) => {
   const [timeLeft, setTimeLeft] = useState(0);
   const [isExpired, setIsExpired] = useState(false);
+  const [showIndicators, setShowIndicators] = useState(false);
 
   useEffect(() => {
     const updateTimer = () => {
@@ -69,6 +86,7 @@ export const SignalCard = ({ market, signalType, category, probability, entryPoi
   }, [expiresAt]);
 
   const color = getColor(signalType);
+  const { runs, strategy } = getRecommendedRuns(probability, validation, signalType);
 
   const formatNum = (n: number) => {
     if (Math.abs(n) < 0.01) return n.toExponential(2);
@@ -121,58 +139,84 @@ export const SignalCard = ({ market, signalType, category, probability, entryPoi
         </div>
       </div>
 
-      {/* Technical Indicators */}
-      {indicators && (
-        <div className="mb-4 bg-background/50 rounded-lg p-3 border border-white/5 space-y-2">
-          <div className="flex items-center gap-1.5 mb-1">
-            <BarChart3 className="w-3 h-3 text-primary" />
-            <span className="text-[10px] font-orbitron text-primary uppercase tracking-wider">Indicators</span>
-          </div>
-          <div className="grid grid-cols-3 gap-1.5 text-center">
-            <div>
-              <div className="text-[9px] text-muted-foreground">BB Upper</div>
-              <div className="text-[11px] font-mono text-foreground">{formatNum(indicators.bb.upper)}</div>
-            </div>
-            <div>
-              <div className="text-[9px] text-muted-foreground">BB Mid</div>
-              <div className="text-[11px] font-mono text-foreground">{formatNum(indicators.bb.middle)}</div>
-            </div>
-            <div>
-              <div className="text-[9px] text-muted-foreground">BB Lower</div>
-              <div className="text-[11px] font-mono text-foreground">{formatNum(indicators.bb.lower)}</div>
-            </div>
-          </div>
-          <div className="grid grid-cols-3 gap-1.5 text-center">
-            <div>
-              <div className="text-[9px] text-muted-foreground">MACD</div>
-              <div className={`text-[11px] font-mono ${indicators.macd.histogram > 0 ? 'text-success' : 'text-destructive'}`}>
-                {indicators.macd.macdLine.toExponential(2)}
-              </div>
-            </div>
-            <div>
-              <div className="text-[9px] text-muted-foreground">Signal</div>
-              <div className="text-[11px] font-mono text-foreground">
-                {indicators.macd.signalLine.toExponential(2)}
-              </div>
-            </div>
-            <div>
-              <div className="text-[9px] text-muted-foreground">RSI</div>
-              <div className={`text-[11px] font-mono ${indicators.rsi > 70 ? 'text-destructive' : indicators.rsi < 30 ? 'text-success' : 'text-foreground'}`}>
-                {indicators.rsi.toFixed(1)}
-              </div>
-            </div>
-          </div>
-          {/* BB Position visual bar */}
+      {/* Recommended Bot Runs */}
+      <div className="mb-4 bg-background/50 rounded-lg p-3 border border-white/5">
+        <div className="flex items-center gap-1.5 mb-2">
+          <Repeat className="w-3.5 h-3.5 text-primary" />
+          <span className="text-[10px] font-orbitron text-primary uppercase tracking-wider">Bot Runs</span>
+        </div>
+        <div className="flex items-center justify-between">
           <div>
-            <div className="flex justify-between text-[9px] text-muted-foreground">
-              <span>Oversold</span>
-              <span>BB Pos: {(indicators.bb.position * 100).toFixed(0)}%</span>
-              <span>Overbought</span>
-            </div>
-            <div className="h-1.5 bg-muted rounded-full overflow-hidden relative">
-              <div className="absolute h-full w-0.5 bg-foreground/50 rounded" style={{ left: `${Math.min(100, Math.max(0, indicators.bb.position * 100))}%` }} />
-            </div>
+            <span className={`font-orbitron text-2xl font-bold ${color}`}>{runs}</span>
+            <span className="text-muted-foreground text-xs ml-1">runs</span>
           </div>
+          <div className="text-right">
+            <div className="text-[10px] text-muted-foreground">{strategy}</div>
+          </div>
+        </div>
+      </div>
+
+      {/* Collapsible Technical Indicators */}
+      {indicators && (
+        <div className="mb-4">
+          <button
+            onClick={() => setShowIndicators(!showIndicators)}
+            className="w-full flex items-center justify-between bg-background/50 rounded-lg px-3 py-2 border border-white/5 hover:border-white/10 transition-colors"
+          >
+            <div className="flex items-center gap-1.5">
+              <BarChart3 className="w-3 h-3 text-primary" />
+              <span className="text-[10px] font-orbitron text-primary uppercase tracking-wider">Technical Indicators</span>
+            </div>
+            {showIndicators ? <ChevronUp className="w-3.5 h-3.5 text-muted-foreground" /> : <ChevronDown className="w-3.5 h-3.5 text-muted-foreground" />}
+          </button>
+          {showIndicators && (
+            <div className="mt-2 bg-background/50 rounded-lg p-3 border border-white/5 space-y-2 animate-in slide-in-from-top-2 duration-200">
+              <div className="grid grid-cols-3 gap-1.5 text-center">
+                <div>
+                  <div className="text-[9px] text-muted-foreground">BB Upper</div>
+                  <div className="text-[11px] font-mono text-foreground">{formatNum(indicators.bb.upper)}</div>
+                </div>
+                <div>
+                  <div className="text-[9px] text-muted-foreground">BB Mid</div>
+                  <div className="text-[11px] font-mono text-foreground">{formatNum(indicators.bb.middle)}</div>
+                </div>
+                <div>
+                  <div className="text-[9px] text-muted-foreground">BB Lower</div>
+                  <div className="text-[11px] font-mono text-foreground">{formatNum(indicators.bb.lower)}</div>
+                </div>
+              </div>
+              <div className="grid grid-cols-3 gap-1.5 text-center">
+                <div>
+                  <div className="text-[9px] text-muted-foreground">MACD</div>
+                  <div className={`text-[11px] font-mono ${indicators.macd.histogram > 0 ? 'text-success' : 'text-destructive'}`}>
+                    {indicators.macd.macdLine.toExponential(2)}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-[9px] text-muted-foreground">Signal</div>
+                  <div className="text-[11px] font-mono text-foreground">
+                    {indicators.macd.signalLine.toExponential(2)}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-[9px] text-muted-foreground">RSI</div>
+                  <div className={`text-[11px] font-mono ${indicators.rsi > 70 ? 'text-destructive' : indicators.rsi < 30 ? 'text-success' : 'text-foreground'}`}>
+                    {indicators.rsi.toFixed(1)}
+                  </div>
+                </div>
+              </div>
+              <div>
+                <div className="flex justify-between text-[9px] text-muted-foreground">
+                  <span>Oversold</span>
+                  <span>BB Pos: {(indicators.bb.position * 100).toFixed(0)}%</span>
+                  <span>Overbought</span>
+                </div>
+                <div className="h-1.5 bg-muted rounded-full overflow-hidden relative">
+                  <div className="absolute h-full w-0.5 bg-foreground/50 rounded" style={{ left: `${Math.min(100, Math.max(0, indicators.bb.position * 100))}%` }} />
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
