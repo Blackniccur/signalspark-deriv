@@ -140,6 +140,27 @@ export const SignalCard = ({ market, signalType, category, probability, entryPoi
         </div>
       </div>
 
+      {/* Hold Ticks for Rise/Fall */}
+      {holdTicks && (signalType === "rise" || signalType === "fall") && (
+        <div className="mb-4 bg-background/50 rounded-lg p-3 border border-yellow-400/20">
+          <div className="flex items-center gap-1.5 mb-2">
+            <Timer className="w-3.5 h-3.5 text-yellow-400" />
+            <span className="text-[10px] font-orbitron text-yellow-400 uppercase tracking-wider">Hold Entry</span>
+          </div>
+          <div className="flex items-center justify-between">
+            <div>
+              <span className={`font-orbitron text-2xl font-bold text-yellow-400`}>{holdTicks}</span>
+              <span className="text-muted-foreground text-xs ml-1">ticks</span>
+            </div>
+            <div className="text-right">
+              <div className="text-[10px] text-muted-foreground">
+                {holdTicks <= 3 ? "Quick scalp — strong momentum" : holdTicks <= 5 ? "Standard hold — steady trend" : "Extended hold — wait for reversion"}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Recommended Bot Runs */}
       <div className="mb-4 bg-background/50 rounded-lg p-3 border border-white/5">
         <div className="flex items-center gap-1.5 mb-2">
