@@ -70,7 +70,7 @@ const getRecommendedRuns = (probability: number, validation: string, signalType:
   return { runs: 5, strategy: "5 entries — scale in carefully" };
 };
 
-export const SignalCard = ({ market, signalType, category, probability, entryPoint, expiresAt, validation, entryDigit, predictionDigit, price, indicators }: SignalCardProps) => {
+export const SignalCard = ({ market, signalType, category, probability, entryPoint, expiresAt, validation, entryDigit, predictionDigit, price, indicators, holdTicks }: SignalCardProps) => {
   const [timeLeft, setTimeLeft] = useState(0);
   const [isExpired, setIsExpired] = useState(false);
   const [showIndicators, setShowIndicators] = useState(false);
