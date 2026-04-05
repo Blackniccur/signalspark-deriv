@@ -197,7 +197,7 @@ const analyzeTickData = (symbol: string, currentPrice: number, historicalPrices:
     entryDigit, price: currentPrice, indicators: indicatorData
   });
 
-  // === OVER/UNDER SIGNAL ===
+  // === OVER/UNDER SIGNAL (with Digit Psychology) ===
   const last5 = last50.slice(-5);
   const last10 = last50.slice(-10);
   const last20 = last50.slice(-20);
@@ -207,32 +207,56 @@ const analyzeTickData = (symbol: string, currentPrice: number, historicalPrices:
   const sma50 = avgPrice;
   
   let overScore = 0;
+  // SMA crossover analysis
   if (sma5 > sma10) overScore += 1;
   if (sma10 > sma20) overScore += 1;
   if (sma5 > sma50) overScore += 1;
   if (currentPrice > sma5) overScore += 1;
+  
+  // RSI zones
   if (rsi > 50) overScore += 0.5;
   if (rsi > 65) overScore += 0.5;
+  if (rsi < 35) overScore -= 0.5;
+  
+  // Bollinger Band position
   if (bbPosition > 0.85) overScore -= 1;
   else if (bbPosition < 0.15) overScore += 1;
   else if (bbPosition > 0.6) overScore += 0.3;
   else if (bbPosition < 0.4) overScore -= 0.3;
+  
+  // MACD momentum
   if (macd.histogram > 0) overScore += 0.8; else overScore -= 0.8;
   if (macd.macdLine > macd.signalLine) overScore += 0.5; else overScore -= 0.5;
   
-  const overDigits = digits.slice(-20).filter(d => d > 4).length;
-  if (overDigits / 20 > 0.55) overScore += 0.5;
+  // === DIGIT PSYCHOLOGY for Over/Under ===
+  // Digit bias: if recent digits cluster high (>4), over is more likely
+  overScore += digitPsych.digitBias * 1.5;
   
-  const totalFactors = 8.5;
+  // Hot digit analysis: if high digits (5-9) are "hot", favor over
+  const hotHighDigits = [5,6,7,8,9].reduce((sum, d) => sum + (digitPsych.digitHeat[d] || 0), 0);
+  const hotLowDigits = [0,1,2,3,4].reduce((sum, d) => sum + (digitPsych.digitHeat[d] || 0), 0);
+  const heatDiff = (hotHighDigits - hotLowDigits) / Math.max(1, hotHighDigits + hotLowDigits);
+  overScore += heatDiff * 0.8;
+  
+  // Streak-based mean reversion on digits
+  const overDigitsRecent = digits.slice(-10).filter(d => d > 4).length;
+  if (overDigitsRecent >= 8) overScore -= 0.6; // too many over digits, expect reversion
+  else if (overDigitsRecent <= 2) overScore += 0.6; // too few, expect bounce
+  
+  // Price momentum confirmation  
+  const priceSlope = (sma5 - sma10) / Math.max(0.0001, volatility);
+  overScore += Math.max(-1, Math.min(1, priceSlope * 0.5));
+  
+  const totalFactors = 11;
   const overProbability = (overScore + totalFactors / 2) / totalFactors;
   const predictedDirection = overProbability > 0.5 ? "over" : "under";
   const directionConfidence = Math.abs(overProbability - 0.5) * 2;
 
   signals.push({
     id: `${symbol}-overunder`, market, signalType: predictedDirection, category: "direction",
-    probability: Math.min(90, Math.max(55, 55 + directionConfidence * 35)),
+    probability: Math.min(92, Math.max(55, 55 + directionConfidence * 37)),
     entryPoint: entryTime, expiresAt,
-    validation: directionConfidence > 0.5 ? "strong" : directionConfidence > 0.25 ? "medium" : "weak",
+    validation: directionConfidence > 0.45 ? "strong" : directionConfidence > 0.2 ? "medium" : "weak",
     entryDigit, predictionDigit: predictedDirection === "over" ? Math.min(9, entryDigit + 1) : Math.max(0, entryDigit - 1),
     price: currentPrice, indicators: indicatorData
   });
