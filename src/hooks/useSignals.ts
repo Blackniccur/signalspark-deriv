@@ -19,6 +19,7 @@ export interface Signal {
   predictionDigit?: number;
   price?: number;
   indicators?: IndicatorData;
+  holdTicks?: number;
 }
 
 interface TickData {
