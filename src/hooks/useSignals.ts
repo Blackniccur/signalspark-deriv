@@ -158,23 +158,42 @@ const analyzeTickData = (symbol: string, currentPrice: number, historicalPrices:
   const entryTime = new Date(now).toLocaleTimeString();
   const market = marketNames[symbol] || symbol;
 
-  // === EVEN/ODD SIGNAL ===
+  // === EVEN/ODD SIGNAL (with Digit Psychology) ===
   const evenCount = digits.filter(d => d % 2 === 0).length;
   const evenRatio = evenCount / 50;
   const recentEvenRatio = evenInRecent / 10;
   let weightedEvenProb = recentEvenRatio * 0.5 + evenRatio * 0.3;
+  
+  // Digit psychology: mean reversion after streaks
+  if (digitPsych.meanReversionStrength > 0) {
+    if (digitPsych.evenStreak > digitPsych.oddStreak) {
+      weightedEvenProb -= digitPsych.meanReversionStrength * 0.15; // expect odd after even streak
+    } else {
+      weightedEvenProb += digitPsych.meanReversionStrength * 0.15; // expect even after odd streak
+    }
+  }
+  
+  // Alternation pattern: high alternation = continue alternating
+  if (digitPsych.alternationRate > 0.7) {
+    const lastDigitEven = digits[digits.length - 1] % 2 === 0;
+    weightedEvenProb = lastDigitEven ? weightedEvenProb - 0.1 : weightedEvenProb + 0.1;
+  }
+  
+  // Technical confirmation
   if (bbPosition > 0.8 || bbPosition < 0.2) weightedEvenProb -= 0.05;
   else if (bbPosition > 0.4 && bbPosition < 0.6) weightedEvenProb += 0.05;
   if (Math.abs(macd.histogram) < volatility * 0.1) weightedEvenProb += 0.03;
   
   const predictedEvenOdd = weightedEvenProb > 0.5 ? "even" : "odd";
   const evenOddConfidence = Math.abs(weightedEvenProb - 0.5) * 2;
+  // Boost confidence when digit psychology confirms
+  const psychBoost = digitPsych.meanReversionStrength > 0.3 ? 0.1 : 0;
 
   signals.push({
     id: `${symbol}-evenodd`, market, signalType: predictedEvenOdd, category: "digit",
-    probability: Math.min(90, Math.max(55, 55 + evenOddConfidence * 35)),
+    probability: Math.min(92, Math.max(55, 55 + (evenOddConfidence + psychBoost) * 35)),
     entryPoint: entryTime, expiresAt,
-    validation: evenOddConfidence > 0.4 ? "strong" : evenOddConfidence > 0.2 ? "medium" : "weak",
+    validation: (evenOddConfidence + psychBoost) > 0.4 ? "strong" : (evenOddConfidence + psychBoost) > 0.2 ? "medium" : "weak",
     entryDigit, price: currentPrice, indicators: indicatorData
   });
 
