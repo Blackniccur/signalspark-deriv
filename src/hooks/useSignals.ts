@@ -72,6 +72,45 @@ const calcMACD = (prices: number[]) => {
   return { macdLine, signalLine, histogram };
 };
 
+// === DIGIT PSYCHOLOGY ANALYSIS ===
+const analyzeDigitPsychology = (digits: number[]) => {
+  // Streak detection - digits tend to revert after long streaks
+  let evenStreak = 0, oddStreak = 0;
+  for (let i = digits.length - 1; i >= 0; i--) {
+    if (digits[i] % 2 === 0 && oddStreak === 0) evenStreak++;
+    else if (digits[i] % 2 !== 0 && evenStreak === 0) oddStreak++;
+    else break;
+  }
+  
+  // Hot/cold digit detection
+  const recent10 = digits.slice(-10);
+  const recent5 = digits.slice(-5);
+  const digitHeat: Record<number, number> = {};
+  for (let d = 0; d <= 9; d++) {
+    const in10 = recent10.filter(x => x === d).length;
+    const in5 = recent5.filter(x => x === d).length;
+    digitHeat[d] = in5 * 2 + in10; // weight recent more
+  }
+  
+  // Over/Under digit bias - how digits cluster above/below 4.5
+  const overDigits = recent10.filter(d => d > 4).length;
+  const underDigits = recent10.filter(d => d <= 4).length;
+  const digitBias = (overDigits - underDigits) / 10; // -1 to 1
+  
+  // Alternation pattern detection
+  let alternations = 0;
+  for (let i = 1; i < recent10.length; i++) {
+    if ((recent10[i] % 2 === 0) !== (recent10[i-1] % 2 === 0)) alternations++;
+  }
+  const alternationRate = alternations / Math.max(1, recent10.length - 1);
+  
+  // Consecutive same-parity detection (mean reversion signal)
+  const parityStreak = Math.max(evenStreak, oddStreak);
+  const meanReversionStrength = parityStreak >= 5 ? 0.8 : parityStreak >= 4 ? 0.5 : parityStreak >= 3 ? 0.25 : 0;
+  
+  return { evenStreak, oddStreak, digitHeat, digitBias, alternationRate, meanReversionStrength, parityStreak };
+};
+
 const analyzeTickData = (symbol: string, currentPrice: number, historicalPrices: number[]): Signal[] => {
   if (historicalPrices.length < 50) return [];
 
@@ -95,6 +134,10 @@ const analyzeTickData = (symbol: string, currentPrice: number, historicalPrices:
   const avgLoss = losses.length > 0 ? losses.reduce((a, b) => a + b, 0) / 14 : 0;
   const rs = avgLoss === 0 ? 100 : avgGain / avgLoss;
   const rsi = 100 - (100 / (1 + rs));
+
+  // Digit Psychology
+  const allDigits = last50.map(p => Math.floor((p * 100) % 10));
+  const digitPsych = analyzeDigitPsychology(allDigits);
   
   const indicatorData: IndicatorData = {
     bb: { upper: bb.upper, middle: bb.middle, lower: bb.lower, position: bbPosition, width: bbWidth },
