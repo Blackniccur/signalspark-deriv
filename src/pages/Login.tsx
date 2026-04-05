@@ -1,10 +1,11 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
+import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Lock, Mail, AlertCircle, Wallet } from "lucide-react";
+import { Lock, Mail, AlertCircle, Wallet, Phone } from "lucide-react";
 
 const Login = () => {
   const [email, setEmail] = useState("");
@@ -13,6 +14,29 @@ const Login = () => {
   const [loading, setLoading] = useState(false);
   const { signIn } = useAuth();
   const navigate = useNavigate();
+
+  // Dynamic payment settings
+  const [paymentMethod, setPaymentMethod] = useState("Binance (USDT TRC20)");
+  const [paymentAddress, setPaymentAddress] = useState("TP8JxB5qcXDzp2rHMADQ3ZFTdXeeogSm6V");
+  const [paymentPrice, setPaymentPrice] = useState("$60");
+  const [adminPhone, setAdminPhone] = useState("");
+  const [paymentNote, setPaymentNote] = useState("After payment, contact admin for login credentials. Only admin can create accounts.");
+
+  useEffect(() => {
+    const fetchSettings = async () => {
+      const { data } = await supabase.from("app_settings").select("*");
+      if (data) {
+        data.forEach((s: any) => {
+          if (s.key === "payment_method") setPaymentMethod(s.value);
+          if (s.key === "payment_address") setPaymentAddress(s.value);
+          if (s.key === "payment_price") setPaymentPrice(s.value);
+          if (s.key === "admin_phone") setAdminPhone(s.value);
+          if (s.key === "payment_note") setPaymentNote(s.value);
+        });
+      }
+    };
+    fetchSettings();
+  }, []);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -24,7 +48,6 @@ const Login = () => {
         setError(error.message);
         setLoading(false);
       } else {
-        // Small delay to let auth state propagate
         setTimeout(() => navigate("/"), 500);
       }
     } catch (err: any) {
@@ -104,19 +127,28 @@ const Login = () => {
         <div className="glass-panel rounded-2xl p-6 glow-pink">
           <div className="flex items-center gap-2 mb-3">
             <Wallet className="h-5 w-5 text-accent" />
-            <h3 className="font-orbitron text-sm text-accent font-bold tracking-wider">GET ACCESS - $60</h3>
+            <h3 className="font-orbitron text-sm text-accent font-bold tracking-wider">GET ACCESS - {paymentPrice}</h3>
           </div>
           <p className="text-muted-foreground text-sm mb-3">
-            Pay via Binance (USDT TRC20) to get your login credentials:
+            Pay via {paymentMethod} to get your login credentials:
           </p>
           <div className="bg-background/50 rounded-lg p-3 border border-accent/20">
-            <p className="text-xs text-muted-foreground mb-1 font-orbitron">USDT Address (TRC20):</p>
+            <p className="text-xs text-muted-foreground mb-1 font-orbitron">{paymentMethod} Address:</p>
             <p className="text-accent text-xs font-mono break-all select-all">
-              TP8JxB5qcXDzp2rHMADQ3ZFTdXeeogSm6V
+              {paymentAddress}
             </p>
           </div>
+          {adminPhone && (
+            <div className="flex items-center gap-2 mt-3 bg-background/50 rounded-lg p-3 border border-accent/20">
+              <Phone className="h-4 w-4 text-accent shrink-0" />
+              <div>
+                <p className="text-[10px] text-muted-foreground font-orbitron">CONTACT ADMIN</p>
+                <p className="text-accent text-sm font-mono">{adminPhone}</p>
+              </div>
+            </div>
+          )}
           <p className="text-muted-foreground text-xs mt-3">
-            After payment, contact admin for login credentials. Only admin can create accounts.
+            {paymentNote}
           </p>
         </div>
 
