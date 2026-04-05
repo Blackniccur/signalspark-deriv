@@ -5,6 +5,7 @@ import { SignalScanner } from "@/components/SignalScanner";
 import { DigitPatternTracker } from "@/components/DigitPatternTracker";
 import { TradingDashboard } from "@/components/TradingDashboard";
 import { useSignals } from "@/hooks/useSignals";
+import { useSignalSound } from "@/hooks/useSignalSound";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Info } from "lucide-react";
 import { useState } from "react";
@@ -14,6 +15,7 @@ const Index = () => {
   const [selectedMarket, setSelectedMarket] = useState<string>("all");
   const [contractFilter, setContractFilter] = useState<string>("all");
   const { signals, isConnected, tickCounts, digitPatterns } = useSignals(connected);
+  useSignalSound(signals);
 
   const filteredSignals = selectedMarket === "all" 
     ? signals 

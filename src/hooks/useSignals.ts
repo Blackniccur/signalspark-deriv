@@ -72,6 +72,45 @@ const calcMACD = (prices: number[]) => {
   return { macdLine, signalLine, histogram };
 };
 
+// === DIGIT PSYCHOLOGY ANALYSIS ===
+const analyzeDigitPsychology = (digits: number[]) => {
+  // Streak detection - digits tend to revert after long streaks
+  let evenStreak = 0, oddStreak = 0;
+  for (let i = digits.length - 1; i >= 0; i--) {
+    if (digits[i] % 2 === 0 && oddStreak === 0) evenStreak++;
+    else if (digits[i] % 2 !== 0 && evenStreak === 0) oddStreak++;
+    else break;
+  }
+  
+  // Hot/cold digit detection
+  const recent10 = digits.slice(-10);
+  const recent5 = digits.slice(-5);
+  const digitHeat: Record<number, number> = {};
+  for (let d = 0; d <= 9; d++) {
+    const in10 = recent10.filter(x => x === d).length;
+    const in5 = recent5.filter(x => x === d).length;
+    digitHeat[d] = in5 * 2 + in10; // weight recent more
+  }
+  
+  // Over/Under digit bias - how digits cluster above/below 4.5
+  const overDigits = recent10.filter(d => d > 4).length;
+  const underDigits = recent10.filter(d => d <= 4).length;
+  const digitBias = (overDigits - underDigits) / 10; // -1 to 1
+  
+  // Alternation pattern detection
+  let alternations = 0;
+  for (let i = 1; i < recent10.length; i++) {
+    if ((recent10[i] % 2 === 0) !== (recent10[i-1] % 2 === 0)) alternations++;
+  }
+  const alternationRate = alternations / Math.max(1, recent10.length - 1);
+  
+  // Consecutive same-parity detection (mean reversion signal)
+  const parityStreak = Math.max(evenStreak, oddStreak);
+  const meanReversionStrength = parityStreak >= 5 ? 0.8 : parityStreak >= 4 ? 0.5 : parityStreak >= 3 ? 0.25 : 0;
+  
+  return { evenStreak, oddStreak, digitHeat, digitBias, alternationRate, meanReversionStrength, parityStreak };
+};
+
 const analyzeTickData = (symbol: string, currentPrice: number, historicalPrices: number[]): Signal[] => {
   if (historicalPrices.length < 50) return [];
 
@@ -95,6 +134,10 @@ const analyzeTickData = (symbol: string, currentPrice: number, historicalPrices:
   const avgLoss = losses.length > 0 ? losses.reduce((a, b) => a + b, 0) / 14 : 0;
   const rs = avgLoss === 0 ? 100 : avgGain / avgLoss;
   const rsi = 100 - (100 / (1 + rs));
+
+  // Digit Psychology
+  const allDigits = last50.map(p => Math.floor((p * 100) % 10));
+  const digitPsych = analyzeDigitPsychology(allDigits);
   
   const indicatorData: IndicatorData = {
     bb: { upper: bb.upper, middle: bb.middle, lower: bb.lower, position: bbPosition, width: bbWidth },
@@ -115,27 +158,46 @@ const analyzeTickData = (symbol: string, currentPrice: number, historicalPrices:
   const entryTime = new Date(now).toLocaleTimeString();
   const market = marketNames[symbol] || symbol;
 
-  // === EVEN/ODD SIGNAL ===
+  // === EVEN/ODD SIGNAL (with Digit Psychology) ===
   const evenCount = digits.filter(d => d % 2 === 0).length;
   const evenRatio = evenCount / 50;
   const recentEvenRatio = evenInRecent / 10;
   let weightedEvenProb = recentEvenRatio * 0.5 + evenRatio * 0.3;
+  
+  // Digit psychology: mean reversion after streaks
+  if (digitPsych.meanReversionStrength > 0) {
+    if (digitPsych.evenStreak > digitPsych.oddStreak) {
+      weightedEvenProb -= digitPsych.meanReversionStrength * 0.15; // expect odd after even streak
+    } else {
+      weightedEvenProb += digitPsych.meanReversionStrength * 0.15; // expect even after odd streak
+    }
+  }
+  
+  // Alternation pattern: high alternation = continue alternating
+  if (digitPsych.alternationRate > 0.7) {
+    const lastDigitEven = digits[digits.length - 1] % 2 === 0;
+    weightedEvenProb = lastDigitEven ? weightedEvenProb - 0.1 : weightedEvenProb + 0.1;
+  }
+  
+  // Technical confirmation
   if (bbPosition > 0.8 || bbPosition < 0.2) weightedEvenProb -= 0.05;
   else if (bbPosition > 0.4 && bbPosition < 0.6) weightedEvenProb += 0.05;
   if (Math.abs(macd.histogram) < volatility * 0.1) weightedEvenProb += 0.03;
   
   const predictedEvenOdd = weightedEvenProb > 0.5 ? "even" : "odd";
   const evenOddConfidence = Math.abs(weightedEvenProb - 0.5) * 2;
+  // Boost confidence when digit psychology confirms
+  const psychBoost = digitPsych.meanReversionStrength > 0.3 ? 0.1 : 0;
 
   signals.push({
     id: `${symbol}-evenodd`, market, signalType: predictedEvenOdd, category: "digit",
-    probability: Math.min(90, Math.max(55, 55 + evenOddConfidence * 35)),
+    probability: Math.min(92, Math.max(55, 55 + (evenOddConfidence + psychBoost) * 35)),
     entryPoint: entryTime, expiresAt,
-    validation: evenOddConfidence > 0.4 ? "strong" : evenOddConfidence > 0.2 ? "medium" : "weak",
+    validation: (evenOddConfidence + psychBoost) > 0.4 ? "strong" : (evenOddConfidence + psychBoost) > 0.2 ? "medium" : "weak",
     entryDigit, price: currentPrice, indicators: indicatorData
   });
 
-  // === OVER/UNDER SIGNAL ===
+  // === OVER/UNDER SIGNAL (with Digit Psychology) ===
   const last5 = last50.slice(-5);
   const last10 = last50.slice(-10);
   const last20 = last50.slice(-20);
@@ -145,32 +207,56 @@ const analyzeTickData = (symbol: string, currentPrice: number, historicalPrices:
   const sma50 = avgPrice;
   
   let overScore = 0;
+  // SMA crossover analysis
   if (sma5 > sma10) overScore += 1;
   if (sma10 > sma20) overScore += 1;
   if (sma5 > sma50) overScore += 1;
   if (currentPrice > sma5) overScore += 1;
+  
+  // RSI zones
   if (rsi > 50) overScore += 0.5;
   if (rsi > 65) overScore += 0.5;
+  if (rsi < 35) overScore -= 0.5;
+  
+  // Bollinger Band position
   if (bbPosition > 0.85) overScore -= 1;
   else if (bbPosition < 0.15) overScore += 1;
   else if (bbPosition > 0.6) overScore += 0.3;
   else if (bbPosition < 0.4) overScore -= 0.3;
+  
+  // MACD momentum
   if (macd.histogram > 0) overScore += 0.8; else overScore -= 0.8;
   if (macd.macdLine > macd.signalLine) overScore += 0.5; else overScore -= 0.5;
   
-  const overDigits = digits.slice(-20).filter(d => d > 4).length;
-  if (overDigits / 20 > 0.55) overScore += 0.5;
+  // === DIGIT PSYCHOLOGY for Over/Under ===
+  // Digit bias: if recent digits cluster high (>4), over is more likely
+  overScore += digitPsych.digitBias * 1.5;
   
-  const totalFactors = 8.5;
+  // Hot digit analysis: if high digits (5-9) are "hot", favor over
+  const hotHighDigits = [5,6,7,8,9].reduce((sum, d) => sum + (digitPsych.digitHeat[d] || 0), 0);
+  const hotLowDigits = [0,1,2,3,4].reduce((sum, d) => sum + (digitPsych.digitHeat[d] || 0), 0);
+  const heatDiff = (hotHighDigits - hotLowDigits) / Math.max(1, hotHighDigits + hotLowDigits);
+  overScore += heatDiff * 0.8;
+  
+  // Streak-based mean reversion on digits
+  const overDigitsRecent = digits.slice(-10).filter(d => d > 4).length;
+  if (overDigitsRecent >= 8) overScore -= 0.6; // too many over digits, expect reversion
+  else if (overDigitsRecent <= 2) overScore += 0.6; // too few, expect bounce
+  
+  // Price momentum confirmation  
+  const priceSlope = (sma5 - sma10) / Math.max(0.0001, volatility);
+  overScore += Math.max(-1, Math.min(1, priceSlope * 0.5));
+  
+  const totalFactors = 11;
   const overProbability = (overScore + totalFactors / 2) / totalFactors;
   const predictedDirection = overProbability > 0.5 ? "over" : "under";
   const directionConfidence = Math.abs(overProbability - 0.5) * 2;
 
   signals.push({
     id: `${symbol}-overunder`, market, signalType: predictedDirection, category: "direction",
-    probability: Math.min(90, Math.max(55, 55 + directionConfidence * 35)),
+    probability: Math.min(92, Math.max(55, 55 + directionConfidence * 37)),
     entryPoint: entryTime, expiresAt,
-    validation: directionConfidence > 0.5 ? "strong" : directionConfidence > 0.25 ? "medium" : "weak",
+    validation: directionConfidence > 0.45 ? "strong" : directionConfidence > 0.2 ? "medium" : "weak",
     entryDigit, predictionDigit: predictedDirection === "over" ? Math.min(9, entryDigit + 1) : Math.max(0, entryDigit - 1),
     price: currentPrice, indicators: indicatorData
   });
