@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useNavigate } from "react-router-dom";
-import { UserPlus, Users, Shield, ArrowLeft, AlertCircle, CheckCircle, Smartphone, Trash2 } from "lucide-react";
+import { UserPlus, Users, Shield, ArrowLeft, AlertCircle, CheckCircle, Smartphone, Trash2, Settings, Phone, Wallet, Save } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 interface ClientProfile {
@@ -40,6 +40,14 @@ const AdminPanel = () => {
   const [deviceSessions, setDeviceSessions] = useState<Record<string, DeviceSession[]>>({});
   const [expandedClient, setExpandedClient] = useState<string | null>(null);
 
+  // Settings state
+  const [paymentMethod, setPaymentMethod] = useState("");
+  const [paymentAddress, setPaymentAddress] = useState("");
+  const [paymentPrice, setPaymentPrice] = useState("");
+  const [adminPhone, setAdminPhone] = useState("");
+  const [paymentNote, setPaymentNote] = useState("");
+  const [savingSettings, setSavingSettings] = useState(false);
+
   useEffect(() => {
     if (!authLoading && (!user || !isAdmin)) {
       navigate("/login");
@@ -50,8 +58,38 @@ const AdminPanel = () => {
     if (isAdmin) {
       fetchClients();
       fetchAllDeviceSessions();
+      fetchSettings();
     }
   }, [isAdmin]);
+
+  const fetchSettings = async () => {
+    const { data } = await supabase.from("app_settings").select("*");
+    if (data) {
+      data.forEach((s: any) => {
+        if (s.key === "payment_method") setPaymentMethod(s.value);
+        if (s.key === "payment_address") setPaymentAddress(s.value);
+        if (s.key === "payment_price") setPaymentPrice(s.value);
+        if (s.key === "admin_phone") setAdminPhone(s.value);
+        if (s.key === "payment_note") setPaymentNote(s.value);
+      });
+    }
+  };
+
+  const saveSettings = async () => {
+    setSavingSettings(true);
+    const settings = [
+      { key: "payment_method", value: paymentMethod },
+      { key: "payment_address", value: paymentAddress },
+      { key: "payment_price", value: paymentPrice },
+      { key: "admin_phone", value: adminPhone },
+      { key: "payment_note", value: paymentNote },
+    ];
+    for (const s of settings) {
+      await supabase.from("app_settings").update({ value: s.value, updated_at: new Date().toISOString() }).eq("key", s.key);
+    }
+    setSavingSettings(false);
+    toast({ title: "Settings Saved", description: "Payment and contact info updated." });
+  };
 
   const fetchClients = async () => {
     const { data } = await supabase
@@ -119,6 +157,19 @@ const AdminPanel = () => {
     }
   };
 
+  const deleteUser = async (clientId: string, clientEmail: string) => {
+    if (!confirm(`Delete user ${clientEmail}? This will remove their profile, roles, and device sessions permanently.`)) return;
+    
+    // Delete device sessions, roles, profile (cascading)
+    await supabase.from("device_sessions").delete().eq("user_id", clientId);
+    await supabase.from("user_roles").delete().eq("user_id", clientId);
+    await supabase.from("profiles").delete().eq("id", clientId);
+    
+    fetchClients();
+    fetchAllDeviceSessions();
+    toast({ title: "User Deleted", description: `${clientEmail} has been removed.` });
+  };
+
   const clearDeviceSession = async (sessionId: string, userId: string) => {
     const { error } = await supabase
       .from("device_sessions")
@@ -172,11 +223,50 @@ const AdminPanel = () => {
               <h1 className="font-orbitron text-2xl font-bold text-primary tracking-wider flex items-center gap-2">
                 <Shield className="h-6 w-6" /> ADMIN PANEL
               </h1>
-              <p className="text-muted-foreground text-xs">Manage client accounts & devices</p>
+              <p className="text-muted-foreground text-xs">Manage clients, payments & settings</p>
             </div>
           </div>
           <Button variant="outline" size="sm" onClick={signOut} className="border-destructive/30 text-destructive hover:bg-destructive/10">
             Sign Out
+          </Button>
+        </div>
+
+        {/* Payment & Contact Settings */}
+        <div className="glass-panel rounded-2xl p-6 glow-pink mb-8">
+          <div className="flex items-center gap-2 mb-5">
+            <Settings className="h-5 w-5 text-accent" />
+            <h2 className="font-orbitron text-sm text-accent font-bold tracking-wider">PAYMENT & CONTACT SETTINGS</h2>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+            <div className="space-y-1">
+              <Label className="text-accent text-[10px] font-orbitron uppercase tracking-widest">Payment Method</Label>
+              <Input value={paymentMethod} onChange={(e) => setPaymentMethod(e.target.value)} className="bg-background/50 border-accent/20" placeholder="e.g. Binance (USDT TRC20)" />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-accent text-[10px] font-orbitron uppercase tracking-widest">Price</Label>
+              <Input value={paymentPrice} onChange={(e) => setPaymentPrice(e.target.value)} className="bg-background/50 border-accent/20" placeholder="e.g. $60" />
+            </div>
+          </div>
+
+          <div className="space-y-4 mb-4">
+            <div className="space-y-1">
+              <Label className="text-accent text-[10px] font-orbitron uppercase tracking-widest flex items-center gap-1"><Wallet className="h-3 w-3" /> Wallet Address</Label>
+              <Input value={paymentAddress} onChange={(e) => setPaymentAddress(e.target.value)} className="bg-background/50 border-accent/20 font-mono text-xs" placeholder="Wallet address" />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-accent text-[10px] font-orbitron uppercase tracking-widest flex items-center gap-1"><Phone className="h-3 w-3" /> Admin Phone Number</Label>
+              <Input value={adminPhone} onChange={(e) => setAdminPhone(e.target.value)} className="bg-background/50 border-accent/20" placeholder="+1 234 567 8900" />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-accent text-[10px] font-orbitron uppercase tracking-widest">Payment Note</Label>
+              <Input value={paymentNote} onChange={(e) => setPaymentNote(e.target.value)} className="bg-background/50 border-accent/20" placeholder="Instructions for clients" />
+            </div>
+          </div>
+
+          <Button onClick={saveSettings} disabled={savingSettings} className="bg-gradient-to-r from-accent/80 to-primary/60 hover:from-accent hover:to-primary text-background font-orbitron font-bold tracking-wider border border-accent/30 gap-2">
+            <Save className="h-4 w-4" />
+            {savingSettings ? "SAVING..." : "SAVE SETTINGS"}
           </Button>
         </div>
 
@@ -270,6 +360,10 @@ const AdminPanel = () => {
                         <Button variant="ghost" size="sm" onClick={() => toggleActive(client.id, client.is_active)}
                           className={client.is_active ? "text-destructive hover:bg-destructive/10" : "text-neon-green hover:bg-neon-green/10"}>
                           {client.is_active ? "Deactivate" : "Activate"}
+                        </Button>
+                        <Button variant="ghost" size="icon" onClick={() => deleteUser(client.id, client.email)}
+                          className="text-destructive hover:bg-destructive/10 h-8 w-8">
+                          <Trash2 className="h-4 w-4" />
                         </Button>
                       </div>
                     </div>

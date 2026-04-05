@@ -121,6 +121,7 @@ const Index = () => {
                     predictionDigit={signal.predictionDigit}
                     price={signal.price}
                     indicators={signal.indicators}
+                    holdTicks={signal.holdTicks}
                   />
                 ))}
               </div>

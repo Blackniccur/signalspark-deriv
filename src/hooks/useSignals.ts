@@ -19,6 +19,7 @@ export interface Signal {
   predictionDigit?: number;
   price?: number;
   indicators?: IndicatorData;
+  holdTicks?: number;
 }
 
 interface TickData {
@@ -309,12 +310,27 @@ const analyzeTickData = (symbol: string, currentPrice: number, historicalPrices:
   const riseFallConfidence = Math.min(1, Math.abs(riseScore));
   const predictedRiseFall = riseScore > 0 ? "rise" : "fall";
 
+  // Calculate optimal hold ticks based on volatility and momentum
+  let holdTicks = 5; // default
+  if (riseFallConfidence > 0.6 && Math.abs(macd.histogram) > volatility * 0.1) {
+    holdTicks = 3; // strong momentum, short hold
+  } else if (riseFallConfidence > 0.4) {
+    holdTicks = 5; // medium confidence
+  } else if (bbPosition > 0.7 || bbPosition < 0.3) {
+    holdTicks = 7; // near extremes, hold longer for reversion
+  } else {
+    holdTicks = 4;
+  }
+  // Adjust for consecutive streaks
+  if (consecutiveRise >= 3 || consecutiveFall >= 3) holdTicks = Math.max(2, holdTicks - 2);
+
   signals.push({
     id: `${symbol}-risefall`, market, signalType: predictedRiseFall, category: "direction",
     probability: Math.min(88, Math.max(55, 55 + riseFallConfidence * 33)),
     entryPoint: entryTime, expiresAt,
     validation: riseFallConfidence > 0.6 ? "strong" : riseFallConfidence > 0.3 ? "medium" : "weak",
-    entryDigit, price: currentPrice, indicators: indicatorData
+    entryDigit, price: currentPrice, indicators: indicatorData,
+    holdTicks
   });
 
   return signals;
