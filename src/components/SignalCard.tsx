@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { AlertCircle, TrendingUp, TrendingDown, Calculator, Shuffle, ArrowUpCircle, ArrowDownCircle, BarChart3, ChevronDown, ChevronUp, Repeat } from "lucide-react";
+import { AlertCircle, TrendingUp, TrendingDown, Calculator, Shuffle, ArrowUpCircle, ArrowDownCircle, BarChart3, ChevronDown, ChevronUp, Repeat, Timer } from "lucide-react";
 import type { IndicatorData } from "@/hooks/useSignals";
 
 interface SignalCardProps {
@@ -14,6 +14,7 @@ interface SignalCardProps {
   predictionDigit?: number;
   price?: number;
   indicators?: IndicatorData;
+  holdTicks?: number;
 }
 
 const getGlowClass = (signalType: string) => {
