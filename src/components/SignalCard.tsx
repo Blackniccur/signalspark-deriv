@@ -149,12 +149,12 @@ export const SignalCard = ({ market, signalType, category, probability, entryPoi
           </div>
           <div className="flex items-center justify-between">
             <div>
-              <span className={`font-orbitron text-2xl font-bold text-yellow-400`}>{holdTicks}</span>
-              <span className="text-muted-foreground text-xs ml-1">ticks</span>
+              <span className={`font-orbitron text-2xl font-bold text-yellow-400`}>1 Min</span>
+              <span className="text-muted-foreground text-xs ml-1">(60s)</span>
             </div>
             <div className="text-right">
               <div className="text-[10px] text-muted-foreground">
-                {holdTicks <= 3 ? "Quick scalp — strong momentum" : holdTicks <= 5 ? "Standard hold — steady trend" : "Extended hold — wait for reversion"}
+                Hold for 1 minute — optimal duration for {signalType === "rise" ? "upward" : "downward"} momentum
               </div>
             </div>
           </div>
