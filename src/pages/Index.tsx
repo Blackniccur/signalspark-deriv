@@ -103,7 +103,6 @@ const Index = () => {
           {isConnected && Object.keys(digitPatterns).length > 0 && (
             <DerivTradingView digitPatterns={digitPatterns} />
           )}
-          )}
 
           {/* Signal Cards */}
           {displaySignals.length > 0 && (
