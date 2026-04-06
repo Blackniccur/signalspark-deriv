@@ -4,6 +4,7 @@ import { SignalCard } from "@/components/SignalCard";
 import { SignalScanner } from "@/components/SignalScanner";
 import { DigitPatternTracker } from "@/components/DigitPatternTracker";
 import { TradingDashboard } from "@/components/TradingDashboard";
+import { DerivTradingView } from "@/components/DerivTradingView";
 import { useSignals } from "@/hooks/useSignals";
 import { useSignalSound } from "@/hooks/useSignalSound";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
