@@ -112,6 +112,79 @@ const analyzeDigitPsychology = (digits: number[]) => {
   return { evenStreak, oddStreak, digitHeat, digitBias, alternationRate, meanReversionStrength, parityStreak };
 };
 
+// === ADVANCED INDICATOR HELPERS ===
+const calcEMA = (data: number[], period: number): number[] => {
+  const k = 2 / (period + 1);
+  const result: number[] = [data[0]];
+  for (let i = 1; i < data.length; i++) {
+    result.push(data[i] * k + result[i - 1] * (1 - k));
+  }
+  return result;
+};
+
+const calcATR = (prices: number[], period = 14): number => {
+  if (prices.length < period + 1) return 0;
+  const trs: number[] = [];
+  for (let i = 1; i < prices.length; i++) {
+    trs.push(Math.abs(prices[i] - prices[i - 1]));
+  }
+  return trs.slice(-period).reduce((a, b) => a + b, 0) / period;
+};
+
+const calcStochRSI = (prices: number[], rsiPeriod = 14, stochPeriod = 14): number => {
+  if (prices.length < rsiPeriod + stochPeriod) return 50;
+  // Calculate RSI series
+  const rsiValues: number[] = [];
+  for (let i = rsiPeriod; i <= prices.length; i++) {
+    const slice = prices.slice(i - rsiPeriod, i);
+    const changes = slice.slice(1).map((p, j) => p - slice[j]);
+    const gains = changes.filter(c => c > 0);
+    const losses = changes.filter(c => c < 0).map(c => Math.abs(c));
+    const ag = gains.length > 0 ? gains.reduce((a, b) => a + b, 0) / rsiPeriod : 0;
+    const al = losses.length > 0 ? losses.reduce((a, b) => a + b, 0) / rsiPeriod : 0;
+    const rs = al === 0 ? 100 : ag / al;
+    rsiValues.push(100 - (100 / (1 + rs)));
+  }
+  const recentRSI = rsiValues.slice(-stochPeriod);
+  const minRSI = Math.min(...recentRSI);
+  const maxRSI = Math.max(...recentRSI);
+  const currentRSI = recentRSI[recentRSI.length - 1];
+  return maxRSI === minRSI ? 50 : ((currentRSI - minRSI) / (maxRSI - minRSI)) * 100;
+};
+
+// Williams %R
+const calcWilliamsR = (prices: number[], period = 14): number => {
+  if (prices.length < period) return -50;
+  const recent = prices.slice(-period);
+  const high = Math.max(...recent);
+  const low = Math.min(...recent);
+  const close = recent[recent.length - 1];
+  return high === low ? -50 : ((high - close) / (high - low)) * -100;
+};
+
+// Trend strength via ADX approximation
+const calcTrendStrength = (prices: number[]): { strength: number; direction: number } => {
+  if (prices.length < 20) return { strength: 0, direction: 0 };
+  const ema5 = calcEMA(prices, 5);
+  const ema10 = calcEMA(prices, 10);
+  const ema20 = calcEMA(prices, 20);
+  const last5 = ema5[ema5.length - 1];
+  const last10 = ema10[ema10.length - 1];
+  const last20 = ema20[ema20.length - 1];
+  
+  // Aligned EMAs = strong trend
+  const bullAlign = last5 > last10 && last10 > last20 ? 1 : 0;
+  const bearAlign = last5 < last10 && last10 < last20 ? 1 : 0;
+  const direction = bullAlign - bearAlign;
+  
+  // Slope of EMA5 as trend momentum
+  const prev5 = ema5[ema5.length - 3] || last5;
+  const slope = (last5 - prev5) / Math.max(0.00001, Math.abs(prev5));
+  const strength = Math.min(1, Math.abs(slope) * 1000 + (bullAlign + bearAlign) * 0.3);
+  
+  return { strength, direction };
+};
+
 const analyzeTickData = (symbol: string, currentPrice: number, historicalPrices: number[]): Signal[] => {
   if (historicalPrices.length < 50) return [];
 
@@ -122,7 +195,7 @@ const analyzeTickData = (symbol: string, currentPrice: number, historicalPrices:
   const priceChanges = last50.slice(1).map((p, i) => p - last50[i]);
   const volatility = Math.sqrt(priceChanges.reduce((sum, c) => sum + c * c, 0) / 49);
   
-  // Bollinger Bands & MACD
+  // Core indicators
   const bb = calcBollingerBands(last50, 20);
   const macd = calcMACD(last50);
   const bbPosition = bb.stdDev > 0 ? (currentPrice - bb.lower) / (bb.upper - bb.lower) : 0.5;
@@ -135,6 +208,12 @@ const analyzeTickData = (symbol: string, currentPrice: number, historicalPrices:
   const avgLoss = losses.length > 0 ? losses.reduce((a, b) => a + b, 0) / 14 : 0;
   const rs = avgLoss === 0 ? 100 : avgGain / avgLoss;
   const rsi = 100 - (100 / (1 + rs));
+
+  // Advanced indicators
+  const stochRSI = calcStochRSI(last50);
+  const williamsR = calcWilliamsR(last50);
+  const atr = calcATR(last50);
+  const trend = calcTrendStrength(last50);
 
   // Digit Psychology
   const allDigits = last50.map(p => Math.floor((p * 100) % 10));
@@ -151,6 +230,7 @@ const analyzeTickData = (symbol: string, currentPrice: number, historicalPrices:
   const digitCounts = digits.reduce((acc, d) => { acc[d] = (acc[d] || 0) + 1; return acc; }, {} as Record<number, number>);
   
   const recentDigits = digits.slice(-10);
+  const recent5Digits = digits.slice(-5);
   const evenInRecent = recentDigits.filter(d => d % 2 === 0).length;
   
   const signals: Signal[] = [];
@@ -159,46 +239,7 @@ const analyzeTickData = (symbol: string, currentPrice: number, historicalPrices:
   const entryTime = new Date(now).toLocaleTimeString();
   const market = marketNames[symbol] || symbol;
 
-  // === EVEN/ODD SIGNAL (with Digit Psychology) ===
-  const evenCount = digits.filter(d => d % 2 === 0).length;
-  const evenRatio = evenCount / 50;
-  const recentEvenRatio = evenInRecent / 10;
-  let weightedEvenProb = recentEvenRatio * 0.5 + evenRatio * 0.3;
-  
-  // Digit psychology: mean reversion after streaks
-  if (digitPsych.meanReversionStrength > 0) {
-    if (digitPsych.evenStreak > digitPsych.oddStreak) {
-      weightedEvenProb -= digitPsych.meanReversionStrength * 0.15; // expect odd after even streak
-    } else {
-      weightedEvenProb += digitPsych.meanReversionStrength * 0.15; // expect even after odd streak
-    }
-  }
-  
-  // Alternation pattern: high alternation = continue alternating
-  if (digitPsych.alternationRate > 0.7) {
-    const lastDigitEven = digits[digits.length - 1] % 2 === 0;
-    weightedEvenProb = lastDigitEven ? weightedEvenProb - 0.1 : weightedEvenProb + 0.1;
-  }
-  
-  // Technical confirmation
-  if (bbPosition > 0.8 || bbPosition < 0.2) weightedEvenProb -= 0.05;
-  else if (bbPosition > 0.4 && bbPosition < 0.6) weightedEvenProb += 0.05;
-  if (Math.abs(macd.histogram) < volatility * 0.1) weightedEvenProb += 0.03;
-  
-  const predictedEvenOdd = weightedEvenProb > 0.5 ? "even" : "odd";
-  const evenOddConfidence = Math.abs(weightedEvenProb - 0.5) * 2;
-  // Boost confidence when digit psychology confirms
-  const psychBoost = digitPsych.meanReversionStrength > 0.3 ? 0.1 : 0;
-
-  signals.push({
-    id: `${symbol}-evenodd`, market, signalType: predictedEvenOdd, category: "digit",
-    probability: Math.min(92, Math.max(55, 55 + (evenOddConfidence + psychBoost) * 35)),
-    entryPoint: entryTime, expiresAt,
-    validation: (evenOddConfidence + psychBoost) > 0.4 ? "strong" : (evenOddConfidence + psychBoost) > 0.2 ? "medium" : "weak",
-    entryDigit, price: currentPrice, indicators: indicatorData
-  });
-
-  // === OVER/UNDER SIGNAL (with Digit Psychology) ===
+  // SMAs
   const last5 = last50.slice(-5);
   const last10 = last50.slice(-10);
   const last20 = last50.slice(-20);
@@ -206,82 +247,186 @@ const analyzeTickData = (symbol: string, currentPrice: number, historicalPrices:
   const sma10 = last10.reduce((a, b) => a + b, 0) / 10;
   const sma20 = last20.reduce((a, b) => a + b, 0) / 20;
   const sma50 = avgPrice;
+
+  // === EVEN/ODD SIGNAL (Enhanced Multi-Factor) ===
+  const evenCount = digits.filter(d => d % 2 === 0).length;
+  const evenRatio = evenCount / 50;
+  const recentEvenRatio = evenInRecent / 10;
+  const recent5EvenRatio = recent5Digits.filter(d => d % 2 === 0).length / 5;
   
+  // Weighted probability across timeframes
+  let weightedEvenProb = recent5EvenRatio * 0.4 + recentEvenRatio * 0.35 + evenRatio * 0.25;
+  
+  // Digit psychology: mean reversion after streaks (stronger weight)
+  if (digitPsych.meanReversionStrength > 0) {
+    if (digitPsych.evenStreak > digitPsych.oddStreak) {
+      weightedEvenProb -= digitPsych.meanReversionStrength * 0.2;
+    } else {
+      weightedEvenProb += digitPsych.meanReversionStrength * 0.2;
+    }
+  }
+  
+  // Alternation pattern
+  if (digitPsych.alternationRate > 0.7) {
+    const lastDigitEven = digits[digits.length - 1] % 2 === 0;
+    weightedEvenProb = lastDigitEven ? weightedEvenProb - 0.12 : weightedEvenProb + 0.12;
+  }
+  
+  // Consecutive same-parity (last 3 digits)
+  const last3Digits = digits.slice(-3);
+  const allEven3 = last3Digits.every(d => d % 2 === 0);
+  const allOdd3 = last3Digits.every(d => d % 2 !== 0);
+  if (allEven3) weightedEvenProb -= 0.12; // strong mean reversion
+  if (allOdd3) weightedEvenProb += 0.12;
+  
+  // Technical confirmation
+  if (bbPosition > 0.8 || bbPosition < 0.2) weightedEvenProb -= 0.04;
+  else if (bbPosition > 0.4 && bbPosition < 0.6) weightedEvenProb += 0.04;
+  if (Math.abs(macd.histogram) < volatility * 0.1) weightedEvenProb += 0.03;
+  
+  // Stochastic RSI extreme = digit instability
+  if (stochRSI > 85 || stochRSI < 15) {
+    // extreme oscillator = prefer alternation
+    const lastEven = digits[digits.length - 1] % 2 === 0;
+    weightedEvenProb = lastEven ? weightedEvenProb - 0.06 : weightedEvenProb + 0.06;
+  }
+  
+  const predictedEvenOdd = weightedEvenProb > 0.5 ? "even" : "odd";
+  const evenOddConfidence = Math.abs(weightedEvenProb - 0.5) * 2;
+  const psychBoost = digitPsych.meanReversionStrength > 0.3 ? 0.12 : digitPsych.parityStreak >= 3 ? 0.06 : 0;
+  
+  // Only emit signal if confidence threshold met
+  const eoConf = evenOddConfidence + psychBoost;
+  if (eoConf > 0.1) {
+    signals.push({
+      id: `${symbol}-evenodd`, market, signalType: predictedEvenOdd, category: "digit",
+      probability: Math.min(95, Math.max(58, 58 + eoConf * 38)),
+      entryPoint: entryTime, expiresAt,
+      validation: eoConf > 0.45 ? "strong" : eoConf > 0.2 ? "medium" : "weak",
+      entryDigit, price: currentPrice, indicators: indicatorData
+    });
+  }
+
+  // === OVER/UNDER SIGNAL (Enhanced with 15+ factors) ===
   let overScore = 0;
-  // SMA crossover analysis
-  if (sma5 > sma10) overScore += 1;
-  if (sma10 > sma20) overScore += 1;
-  if (sma5 > sma50) overScore += 1;
-  if (currentPrice > sma5) overScore += 1;
+  let overFactors = 0;
   
-  // RSI zones
-  if (rsi > 50) overScore += 0.5;
-  if (rsi > 65) overScore += 0.5;
-  if (rsi < 35) overScore -= 0.5;
+  // SMA crossover cascade (4 factors)
+  if (sma5 > sma10) overScore += 1; else overScore -= 0.5;
+  if (sma10 > sma20) overScore += 1; else overScore -= 0.5;
+  if (sma5 > sma50) overScore += 0.8;
+  if (currentPrice > sma5) overScore += 1; else overScore -= 0.5;
+  overFactors += 4;
   
-  // Bollinger Band position
-  if (bbPosition > 0.85) overScore -= 1;
-  else if (bbPosition < 0.15) overScore += 1;
-  else if (bbPosition > 0.6) overScore += 0.3;
-  else if (bbPosition < 0.4) overScore -= 0.3;
+  // RSI zones (2 factors)
+  if (rsi > 55) overScore += 0.6;
+  else if (rsi < 45) overScore -= 0.6;
+  if (rsi > 70) overScore += 0.4; // strong momentum, not overbought for digits
+  if (rsi < 30) overScore -= 0.4;
+  overFactors += 2;
   
-  // MACD momentum
-  if (macd.histogram > 0) overScore += 0.8; else overScore -= 0.8;
-  if (macd.macdLine > macd.signalLine) overScore += 0.5; else overScore -= 0.5;
+  // Stochastic RSI confirmation
+  if (stochRSI > 60) overScore += 0.5;
+  else if (stochRSI < 40) overScore -= 0.5;
+  overFactors += 1;
   
-  // === DIGIT PSYCHOLOGY for Over/Under ===
-  // Digit bias: if recent digits cluster high (>4), over is more likely
-  overScore += digitPsych.digitBias * 1.5;
+  // Williams %R
+  if (williamsR > -30) overScore += 0.4; // overbought zone = momentum up
+  else if (williamsR < -70) overScore -= 0.4;
+  overFactors += 1;
   
-  // Hot digit analysis: if high digits (5-9) are "hot", favor over
+  // Bollinger Band position (2 factors)
+  if (bbPosition > 0.85) overScore -= 1.2; // extreme = reversal
+  else if (bbPosition < 0.15) overScore += 1.2;
+  else if (bbPosition > 0.6) overScore += 0.4;
+  else if (bbPosition < 0.4) overScore -= 0.4;
+  overFactors += 2;
+  
+  // MACD momentum (2 factors)
+  if (macd.histogram > 0) overScore += 0.9; else overScore -= 0.9;
+  if (macd.macdLine > macd.signalLine) overScore += 0.6; else overScore -= 0.6;
+  // MACD histogram direction (accelerating or decelerating)
+  const histogramSlice = [];
+  for (let i = Math.max(0, last50.length - 5); i <= last50.length; i++) {
+    const s = last50.slice(0, i);
+    if (s.length >= 26) {
+      const m = calcMACD(s);
+      histogramSlice.push(m.histogram);
+    }
+  }
+  if (histogramSlice.length >= 2) {
+    const histTrend = histogramSlice[histogramSlice.length - 1] - histogramSlice[0];
+    if (histTrend > 0) overScore += 0.4; else overScore -= 0.4;
+  }
+  overFactors += 3;
+  
+  // Trend strength alignment
+  overScore += trend.direction * trend.strength * 1.2;
+  overFactors += 1;
+  
+  // === DIGIT PSYCHOLOGY for Over/Under (3 factors) ===
+  overScore += digitPsych.digitBias * 1.8;
+  
   const hotHighDigits = [5,6,7,8,9].reduce((sum, d) => sum + (digitPsych.digitHeat[d] || 0), 0);
   const hotLowDigits = [0,1,2,3,4].reduce((sum, d) => sum + (digitPsych.digitHeat[d] || 0), 0);
   const heatDiff = (hotHighDigits - hotLowDigits) / Math.max(1, hotHighDigits + hotLowDigits);
-  overScore += heatDiff * 0.8;
+  overScore += heatDiff * 1.0;
   
-  // Streak-based mean reversion on digits
   const overDigitsRecent = digits.slice(-10).filter(d => d > 4).length;
-  if (overDigitsRecent >= 8) overScore -= 0.6; // too many over digits, expect reversion
-  else if (overDigitsRecent <= 2) overScore += 0.6; // too few, expect bounce
+  if (overDigitsRecent >= 8) overScore -= 0.8;
+  else if (overDigitsRecent <= 2) overScore += 0.8;
+  overFactors += 3;
   
-  // Price momentum confirmation  
+  // Price momentum
   const priceSlope = (sma5 - sma10) / Math.max(0.0001, volatility);
-  overScore += Math.max(-1, Math.min(1, priceSlope * 0.5));
+  overScore += Math.max(-1.2, Math.min(1.2, priceSlope * 0.6));
+  overFactors += 1;
   
-  const totalFactors = 11;
-  const overProbability = (overScore + totalFactors / 2) / totalFactors;
+  const overProbability = (overScore + overFactors / 2) / overFactors;
   const predictedDirection = overProbability > 0.5 ? "over" : "under";
   const directionConfidence = Math.abs(overProbability - 0.5) * 2;
 
-  signals.push({
-    id: `${symbol}-overunder`, market, signalType: predictedDirection, category: "direction",
-    probability: Math.min(92, Math.max(55, 55 + directionConfidence * 37)),
-    entryPoint: entryTime, expiresAt,
-    validation: directionConfidence > 0.45 ? "strong" : directionConfidence > 0.2 ? "medium" : "weak",
-    entryDigit, predictionDigit: predictedDirection === "over" ? Math.min(9, entryDigit + 1) : Math.max(0, entryDigit - 1),
-    price: currentPrice, indicators: indicatorData
-  });
+  if (directionConfidence > 0.08) {
+    signals.push({
+      id: `${symbol}-overunder`, market, signalType: predictedDirection, category: "direction",
+      probability: Math.min(95, Math.max(58, 58 + directionConfidence * 38)),
+      entryPoint: entryTime, expiresAt,
+      validation: directionConfidence > 0.5 ? "strong" : directionConfidence > 0.25 ? "medium" : "weak",
+      entryDigit, predictionDigit: predictedDirection === "over" ? Math.min(9, entryDigit + 1) : Math.max(0, entryDigit - 1),
+      price: currentPrice, indicators: indicatorData
+    });
+  }
 
-  // === MATCHES/DIFFERS SIGNAL ===
+  // === MATCHES/DIFFERS SIGNAL (Enhanced) ===
   const mostFreqDigit = Object.entries(digitCounts).sort((a, b) => b[1] - a[1])[0];
   const predDigit = parseInt(mostFreqDigit[0]);
   const digitFreq = mostFreqDigit[1] / 50;
-  let matchBonus = 0;
-  if (bbWidth < 0.001) matchBonus = 0.05;
-  else if (bbWidth > 0.003) matchBonus = -0.05;
   
-  const adjustedFreq = digitFreq + matchBonus;
+  // Recent frequency (last 10) weighted more
+  const recentFreq = recentDigits.filter(d => d === predDigit).length / 10;
+  const blendedFreq = recentFreq * 0.6 + digitFreq * 0.4;
+  
+  let matchBonus = 0;
+  if (bbWidth < 0.001) matchBonus = 0.06; // low vol = digits cluster
+  else if (bbWidth > 0.003) matchBonus = -0.06;
+  
+  // Hot digit bonus
+  if ((digitPsych.digitHeat[predDigit] || 0) > 4) matchBonus += 0.05;
+  
+  const adjustedFreq = blendedFreq + matchBonus;
   const predictedType = entryDigit === predDigit ? "differs" : "matches";
 
-  signals.push({
-    id: `${symbol}-matchesdiffer`, market, signalType: predictedType, category: "digit",
-    probability: Math.min(82, Math.max(55, 55 + adjustedFreq * 50)),
-    entryPoint: entryTime, expiresAt,
-    validation: adjustedFreq > 0.25 ? "strong" : adjustedFreq > 0.18 ? "medium" : "weak",
-    entryDigit, predictionDigit: predDigit, price: currentPrice, indicators: indicatorData
-  });
+  if (adjustedFreq > 0.12) {
+    signals.push({
+      id: `${symbol}-matchesdiffer`, market, signalType: predictedType, category: "digit",
+      probability: Math.min(88, Math.max(55, 55 + adjustedFreq * 55)),
+      entryPoint: entryTime, expiresAt,
+      validation: adjustedFreq > 0.28 ? "strong" : adjustedFreq > 0.18 ? "medium" : "weak",
+      entryDigit, predictionDigit: predDigit, price: currentPrice, indicators: indicatorData
+    });
+  }
 
-  // === RISE/FALL SIGNAL ===
+  // === RISE/FALL SIGNAL (Enhanced with multi-timeframe) ===
   const recentChanges = priceChanges.slice(-10);
   const positiveChanges = recentChanges.filter(c => c > 0).length;
   const negativeChanges = recentChanges.filter(c => c < 0).length;
@@ -295,32 +440,57 @@ const analyzeTickData = (symbol: string, currentPrice: number, historicalPrices:
   }
   
   let riseScore = 0;
-  if (consecutiveRise >= 4) riseScore = -1;
+  // Consecutive streak reversal (stronger)
+  if (consecutiveRise >= 5) riseScore = -1.5;
+  else if (consecutiveFall >= 5) riseScore = 1.5;
+  else if (consecutiveRise >= 4) riseScore = -1;
   else if (consecutiveFall >= 4) riseScore = 1;
   else {
     riseScore = (positiveChanges - negativeChanges) / 10;
-    if (sma5 > sma10) riseScore += 0.2; else riseScore -= 0.2;
+    if (sma5 > sma10) riseScore += 0.25; else riseScore -= 0.25;
   }
-  if (bbPosition > 0.9) riseScore -= 0.6;
-  else if (bbPosition < 0.1) riseScore += 0.6;
-  if (macd.histogram > 0 && macd.histogram > volatility * 0.05) riseScore += 0.4;
-  else if (macd.histogram < 0 && Math.abs(macd.histogram) > volatility * 0.05) riseScore -= 0.4;
-  if (macd.macdLine > macd.signalLine) riseScore += 0.3; else riseScore -= 0.3;
   
-  const riseFallConfidence = Math.min(1, Math.abs(riseScore));
+  // Bollinger Band reversal zones
+  if (bbPosition > 0.92) riseScore -= 0.8;
+  else if (bbPosition < 0.08) riseScore += 0.8;
+  else if (bbPosition > 0.85) riseScore -= 0.4;
+  else if (bbPosition < 0.15) riseScore += 0.4;
+  
+  // MACD with histogram acceleration
+  if (macd.histogram > 0 && macd.histogram > volatility * 0.05) riseScore += 0.5;
+  else if (macd.histogram < 0 && Math.abs(macd.histogram) > volatility * 0.05) riseScore -= 0.5;
+  if (macd.macdLine > macd.signalLine) riseScore += 0.35; else riseScore -= 0.35;
+  
+  // Trend alignment boost
+  riseScore += trend.direction * trend.strength * 0.8;
+  
+  // RSI divergence
+  if (rsi > 70 && consecutiveRise >= 2) riseScore -= 0.3; // overbought + rising = reversal
+  if (rsi < 30 && consecutiveFall >= 2) riseScore += 0.3;
+  
+  // Williams %R confirmation
+  if (williamsR > -20) riseScore -= 0.2; // extreme overbought
+  if (williamsR < -80) riseScore += 0.2; // extreme oversold
+  
+  // ATR-based volatility: high ATR = bigger moves, more confidence
+  const atrRatio = atr / Math.max(0.00001, currentPrice);
+  const volMultiplier = Math.min(1.3, 0.8 + atrRatio * 5000);
+  
+  const riseFallConfidence = Math.min(1, Math.abs(riseScore) * volMultiplier);
   const predictedRiseFall = riseScore > 0 ? "rise" : "fall";
 
-  // Hold duration: 1 minute (60 seconds) for Rise/Fall trades
-  let holdTicks = 60; // 1 minute hold duration in seconds
+  const holdTicks = 60; // 1 minute
 
-  signals.push({
-    id: `${symbol}-risefall`, market, signalType: predictedRiseFall, category: "direction",
-    probability: Math.min(88, Math.max(55, 55 + riseFallConfidence * 33)),
-    entryPoint: entryTime, expiresAt,
-    validation: riseFallConfidence > 0.6 ? "strong" : riseFallConfidence > 0.3 ? "medium" : "weak",
-    entryDigit, price: currentPrice, indicators: indicatorData,
-    holdTicks
-  });
+  if (riseFallConfidence > 0.1) {
+    signals.push({
+      id: `${symbol}-risefall`, market, signalType: predictedRiseFall, category: "direction",
+      probability: Math.min(95, Math.max(58, 58 + riseFallConfidence * 37)),
+      entryPoint: entryTime, expiresAt,
+      validation: riseFallConfidence > 0.65 ? "strong" : riseFallConfidence > 0.3 ? "medium" : "weak",
+      entryDigit, price: currentPrice, indicators: indicatorData,
+      holdTicks
+    });
+  }
 
   return signals;
 };
