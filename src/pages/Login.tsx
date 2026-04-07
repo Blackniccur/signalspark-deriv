@@ -23,19 +23,34 @@ const Login = () => {
   const [paymentNote, setPaymentNote] = useState("After payment, contact admin for login credentials. Only admin can create accounts.");
 
   useEffect(() => {
+    const applySettings = (data: any[]) => {
+      data.forEach((s: any) => {
+        if (s.key === "payment_method") setPaymentMethod(s.value);
+        if (s.key === "payment_address") setPaymentAddress(s.value);
+        if (s.key === "payment_price") setPaymentPrice(s.value);
+        if (s.key === "admin_phone") setAdminPhone(s.value);
+        if (s.key === "payment_note") setPaymentNote(s.value);
+      });
+    };
+
     const fetchSettings = async () => {
       const { data } = await supabase.from("app_settings").select("*");
-      if (data) {
-        data.forEach((s: any) => {
-          if (s.key === "payment_method") setPaymentMethod(s.value);
-          if (s.key === "payment_address") setPaymentAddress(s.value);
-          if (s.key === "payment_price") setPaymentPrice(s.value);
-          if (s.key === "admin_phone") setAdminPhone(s.value);
-          if (s.key === "payment_note") setPaymentNote(s.value);
-        });
-      }
+      if (data) applySettings(data);
     };
     fetchSettings();
+
+    // Realtime subscription for instant admin changes
+    const channel = supabase
+      .channel('app_settings_realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'app_settings' }, (payload) => {
+        const row = payload.new as any;
+        if (row?.key && row?.value) {
+          applySettings([row]);
+        }
+      })
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
   }, []);
 
   const handleLogin = async (e: React.FormEvent) => {
