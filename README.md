@@ -1,73 +1,31 @@
-# Welcome to your Lovable project
+# SignalSpark — Deriv Analysis Tool
 
-## Project info
+A standalone React signal analysis tool that connects directly to the Deriv API (App ID 70785) and generates trading signals for synthetic indices.
 
-**URL**: https://lovable.dev/projects/645dd5d9-ed76-4626-9b2c-c62dc9f11bc0
+## Features
 
-## How can I edit this code?
+- Live WebSocket connection to Deriv API
+- 10 synthetic indices (Volatility 10/25/50/75/100 + 1s variants)
+- Indicators: Bollinger Bands, MACD, RSI, StochRSI, Williams %R
+- Signal types: Rise/Fall, Even/Odd, Over/Under, Matches/Differs
+- Real-time digit pattern tracker
+- Price chart (Recharts)
+- Audio alerts for strong signals
 
-There are several ways of editing your application.
+## Quick Start
 
-**Use Lovable**
-
-Simply visit the [Lovable Project](https://lovable.dev/projects/645dd5d9-ed76-4626-9b2c-c62dc9f11bc0) and start prompting.
-
-Changes made via Lovable will be committed automatically to this repo.
-
-**Use your preferred IDE**
-
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
-
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
-
-Follow these steps:
-
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
-
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
-
-# Step 3: Install the necessary dependencies.
-npm i
-
-# Step 4: Start the development server with auto-reloading and an instant preview.
+```bash
+npm install
 npm run dev
 ```
 
-**Edit a file directly in GitHub**
+Open http://localhost:3000 and click **GENERATE SIGNALS**.
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+## Tech Stack
 
-**Use GitHub Codespaces**
-
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
-
-## What technologies are used for this project?
-
-This project is built with:
-
+- React 18 + TypeScript
 - Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
-
-## How can I deploy this project?
-
-Simply open [Lovable](https://lovable.dev/projects/645dd5d9-ed76-4626-9b2c-c62dc9f11bc0) and click on Share -> Publish.
-
-## Can I connect a custom domain to my Lovable project?
-
-Yes, you can!
-
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
-
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
+- Recharts (charts)
+- Lucide React (icons)
+- SCSS (styling)
+- Deriv API via WebSocket (App ID 70785)
